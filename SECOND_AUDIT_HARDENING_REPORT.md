@@ -111,3 +111,73 @@ Antes da homologação real do Mercado Livre, foi adicionada uma trava arquitetu
 O modo `LIVE` precisa ser configurado explicitamente após a homologação e aprovação operacional. A configuração está documentada no `env.sample.txt`. A nova suíte de segurança validou o padrão READ_ONLY, todas as operações bloqueadas e a liberação somente no modo LIVE.
 
 Validação desta atualização: typecheck aprovado, 10 arquivos de teste, 26 testes aprovados e build de produção aprovado. A homologação real deve continuar começando em read-only, com OAuth, consulta da conta e importação limitada a cinco anúncios pausados.
+
+
+## Atualização — Supply Engine S1 a S3
+
+Foi adicionada a primeira camada do LUARY SUPPLY ENGINE de forma aditiva. O módulo não cria uma segunda verdade para produto, preço, oferta ou estoque: fornecedores são fontes de abastecimento; o Produto Mestre, o Pricing Engine, o Inventory Ledger, o Media Library e o Publication Gate continuam sendo as estruturas comerciais centrais.
+
+A migration `0005_mysterious_quentin_quire.sql` introduz fornecedores, integrações com credenciais criptografadas, catálogo externo, mappings revisáveis, políticas de roteamento primário/backup, histórico de custo e estoque, alertas, purchase orders, grupos de fulfillment, devoluções e snapshots de saúde do fornecedor. A importação de produtos de fornecedor é idempotente por `userId + supplierId + externalId`, e produtos sem correspondência não geram Produto Mestre automaticamente.
+
+Foram criados os motores `server/supply/engines.ts`, `server/sourcing/supplierMatchingService.ts` e `server/suppliers/supplierService.ts`. Eles calculam Landed Cost, margem mínima, Supply Score, Opportunity Score, roteamento por estoque confiável/risco e Supply Gate. O modo `pre_order` é uma exceção explícita; dropshipping sem estoque confiável continua bloqueado.
+
+O router `supply` foi registrado no `appRouter` com procedures para dashboard, fornecedores, integrações, catálogo, matching, mappings, políticas de roteamento e análises. A interface `/supply` e as subseções `/supply/suppliers`, `/supply/catalog`, `/supply/opportunities`, `/supply/purchaseOrders` e `/supply/dropshipping` foram adicionadas ao Command Center.
+
+Esta entrega não conecta automaticamente fornecedores externos nem autoriza publicação. Os próximos incrementos devem implementar adaptadores de catálogo/inventário, Supply Gate persistente, integração do abastecimento com o Inventory Ledger, Purchase Orders operacionais, tracking, failover efetivo e Opportunity Engine baseado em vendas reais.
+
+Validação desta atualização: migration gerada com 45 tabelas, typecheck aprovado, 11 arquivos de teste, 32 testes aprovados e build de produção aprovado.
+
+
+## Atualização — Hardening S3.1 e Supplier Adapter Framework
+
+A auditoria adicional apontou um P0 no endpoint `supply.mappings.review`: `variantId` podia ser persistido sem validar existência, ownership e pertencimento ao Produto Mestre. O router agora executa as três validações no backend, e a regra foi extraída para `server/supply/securityPolicy.ts` com testes unitários.
+
+A persistência de `unmatched` foi corrigida. A tabela de mappings permite `productId` nulo quando não existe candidato, preservando a evidência de que o produto foi analisado e não encontrou correspondência. Matches `probable` exigem o estado intermediário `reviewed`; matches `exact` só podem ser aprovados automaticamente mediante `AUTO_APPROVE_EXACT=true`, mantendo o padrão desligado.
+
+Foi iniciado o S4 com contrato separado `SupplierAdapter`, `SupplierAdapterRegistry`, `ManualSupplierAdapter` e `CsvSupplierAdapter`. O CSV possui normalização de identificadores, estoque e valores para centavos, com rejeição de linhas sem ID ou nome. Nenhum adapter de fornecedor chama APIs de marketplace ou publica dados.
+
+A validação local desta atualização foi executada: typecheck aprovado, 13 arquivos de teste, 39 testes aprovados. Ainda não há homologação de fornecedor real, Inventory Ledger unificado, Purchase Order executável, tracking, failover, Opportunity persistida ou automação de dropshipping. Esses itens continuam bloqueados até a implementação das fases seguintes e testes E2E.
+
+
+## Atualização — S3.2 Hardening do CSV
+
+Foi corrigido o P0 monetário identificado na auditoria S3.1. O parser anterior podia interpretar `12.50` como `125000` centavos; o novo `parseMoneyToCents` diferencia separadores decimais e de milhar nos formatos brasileiro e internacional e aceita moeda explícita.
+
+Casos cobertos: `12,50 → 1250`, `12.50 → 1250`, `1.250,50 → 125050`, `1,250.50 → 125050`, `1250 → 125000` e `R$ 12,50 → 1250`. Valores negativos, inválidos, não finitos e acima do limite operacional são rejeitados. O parser é utilizado pelo `CsvSupplierAdapter` para custo e frete.
+
+A S3.2 foi validada com typecheck aprovado, 13 arquivos de teste e 40 testes aprovados. A plataforma continua em `READ_ONLY` para marketplaces. Ainda permanecem bloqueados para produção de dropshipping o Import Pipeline completo, Inventory Ledger unificado, Availability, Purchase Orders executáveis, tracking, failover, Opportunity persistida, Media Pipeline, automação e testes E2E.
+
+
+## Atualização — S3.2.1 Migration & Supply Safety Hardening
+
+A migration `0005_mysterious_quentin_quire.sql` continha quatro nomes de foreign keys acima do limite de 64 caracteres do MariaDB/MySQL. Eles foram substituídos por nomes curtos e estáveis: `fg_items_group_fk`, `sp_inv_hist_product_fk`, `sp_price_hist_product_fk` e `sp_mapping_product_fk`. O teste `server/migrationIdentifierLength.test.ts` percorre todas as migrations e impede regressão desse problema.
+
+O Supply Gate não permite mais que `pre_order` contorne governança comercial. Essa modalidade ignora apenas disponibilidade e prazo (`stockReliable`, `shippingKnown`, `leadTimeKnown`); fornecedor aprovado, Produto Mestre, custo, margem, mídia, conteúdo e direitos continuam obrigatórios. Foram adicionados testes para cada bloqueio crítico.
+
+O `CsvSupplierAdapter` foi reforçado para detectar `,` e `;`, remover BOM UTF-8, suportar CRLF/LF, aspas escapadas e validar estoque como inteiro não negativo e finito. O parser monetário mantém suporte aos formatos brasileiro e internacional.
+
+Validação desta fase: typecheck aprovado, 14 arquivos de teste, 44 testes aprovados. O projeto continua seguro para evolução, mas ainda não está liberado para dropshipping automático: Availability/Inventory Ledger unificado, reservas atômicas, sincronização de fornecedor, Purchase Orders, tracking, failover, Opportunity persistida, Media Pipeline, reconciliação, DLQ e E2E ainda precisam ser implementados.
+
+
+## Atualização — S4-A Connection Center e Supplier Adapter Runtime
+
+O contrato de fornecedores foi refinado para composição por capacidades. Cada adapter declara o que realmente suporta entre catálogo, estoque, preço, pedidos, cancelamento, tracking e mídia. Manual e CSV declaram somente leitura de catálogo, estoque e preço; não prometem pedido ou tracking.
+
+O `SupplierConnectionService` implementa ownership por usuário, descriptografia de credenciais, criação pelo `SupplierAdapterRegistry`, `authenticate()`, `testConnection()` e persistência do resultado. O fluxo não grava `connected` no momento de salvar credenciais: a integração permanece `pending` até um teste real; falhas ficam como `error` com último erro persistido.
+
+O router protegido `supply.suppliers.connections` e a tela Connection Center exibem fornecedor, tipo, status, capacidades, última sincronização, último erro e o botão `Testar conexão`. A camada foi validada com typecheck, testes e build.
+
+S4-A não representa ainda sincronização operacional completa. Ficam para S4-B o processamento assíncrono por worker, `supplier_sync_runs`, Import Pipeline, histórico de execução, matching e alertas. O modo de marketplace continua `READ_ONLY`, e Availability, reserva atômica, Purchase Orders, tracking e dropshipping permanecem bloqueados.
+
+
+## Atualização — S4-A.1 Security & Runtime Hardening
+
+A auditoria identificou um risco P0: a listagem de integrações retornava a linha completa de `supplier_integrations`, incluindo `encryptedCredentials`. O problema foi corrigido com projeção explícita e o DTO `toSafeSupplierIntegration`, que devolve somente os campos operacionais permitidos. A cobertura dedicada verifica também `credentials`, `secret`, `token`, `password`, `apiKey`, `accessToken` e `refreshToken`.
+
+O `saveIntegration` não aceita mais `status` no contrato e sempre grava `pending` na criação ou atualização de credenciais. O router foi ajustado para não repassar esse campo; apenas o fluxo de teste promove a integração para `testing`, `connected` ou `error`.
+
+A matriz de capabilities foi centralizada no `SupplierAdapterRegistry.capabilities()`. O endpoint de listagem agora retorna capabilities e o Connection Center as renderiza dinamicamente, mostrando capacidades presentes e ausentes por integração.
+
+Os snapshots Drizzle 0005/0006 foram alinhados à constraint curta `sp_mapping_product_fk`. O teste de integridade passou a validar SQL, snapshots e journal.
+
+Validação: typecheck aprovado, 15 arquivos de teste, 46 testes aprovados e build de produção aprovado. Permanecem deliberadamente para S4-B os schemas Zod específicos por adapter, armazenamento de CSV fora de credenciais, parser CSV orientado por linha com respeito a aspas, métricas de conexão, sincronização real, Import Pipeline assíncrono, histórico, matching e Inventory Ledger. O modo externo continua `READ_ONLY`.
