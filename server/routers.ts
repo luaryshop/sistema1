@@ -22,6 +22,7 @@ import { conflictsRouter } from "./routers/conflicts";
 import { identifiersRouter } from "./routers/identifiers";
 import { inventoryMovementsRouter } from "./routers/inventoryMovements";
 import { mappingsRouter } from "./routers/mappings";
+import { supplyRouter } from "./routers/supply";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -89,6 +90,7 @@ export const appRouter = router({
   identifiers: identifiersRouter,
   inventoryMovements: inventoryMovementsRouter,
   mappings: mappingsRouter,
+  supply: supplyRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

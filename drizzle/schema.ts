@@ -718,3 +718,263 @@ export const publicationPreflightResults = mysqlTable("publication_preflight_res
 });
 export type PublicationPreflightResult = typeof publicationPreflightResults.$inferSelect;
 export type InsertPublicationPreflightResult = typeof publicationPreflightResults.$inferInsert;
+
+
+/** Approved supplier sources for hybrid supply and dropshipping operations. */
+export const suppliers = mysqlTable("suppliers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  legalName: varchar("legal_name", { length: 255 }),
+  document: varchar("document", { length: 50 }),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 50 }),
+  website: varchar("website", { length: 500 }),
+  status: varchar("status", { length: 30 }).default("pending_review").notNull(),
+  rating: int("rating_bp").default(0).notNull(),
+  defaultShippingDays: int("default_shipping_days").default(0).notNull(),
+  returnPolicy: text("return_policy"),
+  dropshippingEnabled: int("dropshipping_enabled").default(0).notNull(),
+  crossDockingEnabled: int("cross_docking_enabled").default(0).notNull(),
+  apiEnabled: int("api_enabled").default(0).notNull(),
+  feedEnabled: int("feed_enabled").default(0).notNull(),
+  integrationType: varchar("integration_type", { length: 30 }).default("manual").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierUserIdx: `KEY suppliers_user_idx (user_id, status)`,
+}));
+export type Supplier = typeof suppliers.$inferSelect;
+export type InsertSupplier = typeof suppliers.$inferInsert;
+
+/** Encrypted supplier integration credentials and synchronization state. */
+export const supplierIntegrations = mysqlTable("supplier_integrations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 30 }).notNull(),
+  status: varchar("status", { length: 30 }).default("inactive").notNull(),
+  encryptedCredentials: text("encrypted_credentials"),
+  lastSyncAt: timestamp("last_sync_at"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierIntegrationUnique: uniqueIndex("supplier_integrations_user_supplier_type").on(table.userId, table.supplierId, table.type),
+}));
+export type SupplierIntegration = typeof supplierIntegrations.$inferSelect;
+export type InsertSupplierIntegration = typeof supplierIntegrations.$inferInsert;
+
+/** Supplier catalog rows; never replaces the Luary Product Master. */
+export const supplierProducts = mysqlTable("supplier_products", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  externalId: varchar("external_id", { length: 255 }).notNull(),
+  sku: varchar("sku", { length: 100 }),
+  internalCode: varchar("internal_code", { length: 100 }),
+  ean: varchar("ean", { length: 50 }),
+  gtin: varchar("gtin", { length: 50 }),
+  mpn: varchar("mpn", { length: 100 }),
+  name: varchar("name", { length: 500 }).notNull(),
+  description: text("description"),
+  brand: varchar("brand", { length: 150 }),
+  costCents: int("cost_cents").default(0).notNull(),
+  shippingCostCents: int("shipping_cost_cents").default(0).notNull(),
+  stock: int("stock").default(0).notNull(),
+  weightGrams: int("weight_grams").default(0).notNull(),
+  widthMm: int("width_mm").default(0).notNull(),
+  heightMm: int("height_mm").default(0).notNull(),
+  lengthMm: int("length_mm").default(0).notNull(),
+  images: text("images"),
+  videos: text("videos"),
+  attributes: text("attributes"),
+  category: varchar("category", { length: 150 }),
+  status: varchar("status", { length: 30 }).default("active").notNull(),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierExternalUnique: uniqueIndex("supplier_products_supplier_external").on(table.userId, table.supplierId, table.externalId),
+  supplierProductUserIdx: `KEY supplier_products_user_status_idx (user_id, status)`,
+}));
+export type SupplierProduct = typeof supplierProducts.$inferSelect;
+export type InsertSupplierProduct = typeof supplierProducts.$inferInsert;
+
+/** Human-reviewed supplier product to Product Master relationship. */
+export const supplierProductMappings = mysqlTable("supplier_product_mappings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  productId: int("product_id").references(() => products.id, { onDelete: "set null" }),
+  variantId: int("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+  confidence: int("confidence").default(0).notNull(),
+  matchType: varchar("match_type", { length: 30 }).default("unmatched").notNull(),
+  status: varchar("status", { length: 30 }).default("pending_review").notNull(),
+  reviewedBy: int("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierProductMappingUnique: uniqueIndex("supplier_product_mapping_unique").on(table.userId, table.supplierProductId),
+  supplierMappingProductIdx: `KEY supplier_product_mapping_product_idx (product_id, status)`,
+}));
+export type SupplierProductMapping = typeof supplierProductMappings.$inferSelect;
+export type InsertSupplierProductMapping = typeof supplierProductMappings.$inferInsert;
+
+/** Product-level sourcing and safety policy; priority 0 is primary, larger values are backups. */
+export const supplyRoutingPolicies = mysqlTable("supply_routing_policies", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: int("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  priority: int("priority").default(0).notNull(),
+  fulfillmentMode: varchar("fulfillment_mode", { length: 30 }).default("dropshipping").notNull(),
+  supplierStockBuffer: int("supplier_stock_buffer").default(0).notNull(),
+  staleAfterMinutes: int("stale_after_minutes").default(120).notNull(),
+  blockAfterStaleMinutes: int("block_after_stale_minutes").default(1440).notNull(),
+  minimumMarginBp: int("minimum_margin_bp").default(0).notNull(),
+  autoFulfillmentAllowed: int("auto_fulfillment_allowed").default(0).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplyRoutingUnique: uniqueIndex("supply_routing_product_supplier").on(table.userId, table.productId, table.supplierId),
+  supplyRoutingPriorityIdx: `KEY supply_routing_priority_idx (user_id, product_id, priority)`,
+}));
+export type SupplyRoutingPolicy = typeof supplyRoutingPolicies.$inferSelect;
+export type InsertSupplyRoutingPolicy = typeof supplyRoutingPolicies.$inferInsert;
+
+export const supplierPriceHistory = mysqlTable("supplier_price_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  costCents: int("cost_cents").notNull(),
+  shippingCostCents: int("shipping_cost_cents").default(0).notNull(),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+export type SupplierPriceHistory = typeof supplierPriceHistory.$inferSelect;
+export type InsertSupplierPriceHistory = typeof supplierPriceHistory.$inferInsert;
+
+export const supplierInventoryHistory = mysqlTable("supplier_inventory_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  stock: int("stock").notNull(),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+export type SupplierInventoryHistory = typeof supplierInventoryHistory.$inferSelect;
+export type InsertSupplierInventoryHistory = typeof supplierInventoryHistory.$inferInsert;
+
+export const supplyAlerts = mysqlTable("supply_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+  supplierProductId: int("supplier_product_id").references(() => supplierProducts.id, { onDelete: "set null" }),
+  productId: int("product_id").references(() => products.id, { onDelete: "set null" }),
+  type: varchar("type", { length: 50 }).notNull(),
+  severity: varchar("severity", { length: 20 }).default("warning").notNull(),
+  status: varchar("status", { length: 20 }).default("open").notNull(),
+  message: text("message").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+});
+export type SupplyAlert = typeof supplyAlerts.$inferSelect;
+export type InsertSupplyAlert = typeof supplyAlerts.$inferInsert;
+
+export const purchaseOrders = mysqlTable("purchase_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  orderId: int("order_id").references(() => orders.id, { onDelete: "set null" }),
+  status: varchar("status", { length: 30 }).default("draft").notNull(),
+  subtotalCents: int("subtotal_cents").default(0).notNull(),
+  shippingCents: int("shipping_cents").default(0).notNull(),
+  totalCents: int("total_cents").default(0).notNull(),
+  externalId: varchar("external_id", { length: 255 }),
+  trackingCode: varchar("tracking_code", { length: 255 }),
+  carrier: varchar("carrier", { length: 150 }),
+  invoiceReference: varchar("invoice_reference", { length: 255 }),
+  fiscalMode: varchar("fiscal_mode", { length: 30 }).default("not_defined").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  purchaseOrderUserIdx: `KEY purchase_orders_user_status_idx (user_id, status)`,
+  purchaseOrderExternalUnique: uniqueIndex("purchase_orders_supplier_external").on(table.userId, table.supplierId, table.externalId),
+}));
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
+
+export const purchaseOrderItems = mysqlTable("purchase_order_items", {
+  id: int("id").autoincrement().primaryKey(),
+  purchaseOrderId: int("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  supplierProductId: int("supplier_product_id").references(() => supplierProducts.id, { onDelete: "set null" }),
+  productId: int("product_id").references(() => products.id, { onDelete: "set null" }),
+  variantId: int("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+  sku: varchar("sku", { length: 100 }),
+  quantity: int("quantity").default(1).notNull(),
+  unitCostCents: int("unit_cost_cents").default(0).notNull(),
+  totalCostCents: int("total_cost_cents").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
+
+export const fulfillmentGroups = mysqlTable("fulfillment_groups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orderId: int("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+  mode: varchar("mode", { length: 30 }).default("own_stock").notNull(),
+  status: varchar("status", { length: 30 }).default("pending").notNull(),
+  trackingCode: varchar("tracking_code", { length: 255 }),
+  carrier: varchar("carrier", { length: 150 }),
+  shippedAt: timestamp("shipped_at"),
+  deliveredAt: timestamp("delivered_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type FulfillmentGroup = typeof fulfillmentGroups.$inferSelect;
+export type InsertFulfillmentGroup = typeof fulfillmentGroups.$inferInsert;
+
+export const fulfillmentGroupItems = mysqlTable("fulfillment_group_items", {
+  id: int("id").autoincrement().primaryKey(),
+  fulfillmentGroupId: int("fulfillment_group_id").notNull().references(() => fulfillmentGroups.id, { onDelete: "cascade" }),
+  orderItemId: int("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }),
+  quantity: int("quantity").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type FulfillmentGroupItem = typeof fulfillmentGroupItems.$inferSelect;
+export type InsertFulfillmentGroupItem = typeof fulfillmentGroupItems.$inferInsert;
+
+export const returnRequests = mysqlTable("return_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orderId: int("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+  reason: text("reason").notNull(),
+  status: varchar("status", { length: 30 }).default("requested").notNull(),
+  supplierResponsibility: int("supplier_responsibility").default(0).notNull(),
+  marketplaceResponsibility: int("marketplace_responsibility").default(0).notNull(),
+  refundAmountCents: int("refund_amount_cents").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type ReturnRequest = typeof returnRequests.$inferSelect;
+export type InsertReturnRequest = typeof returnRequests.$inferInsert;
+
+export const supplierHealthSnapshots = mysqlTable("supplier_health_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  reliabilityBp: int("reliability_bp").default(0).notNull(),
+  averageShippingDays: int("average_shipping_days").default(0).notNull(),
+  delayCount: int("delay_count").default(0).notNull(),
+  cancellationCount: int("cancellation_count").default(0).notNull(),
+  returnCount: int("return_count").default(0).notNull(),
+  trackingCoverageBp: int("tracking_coverage_bp").default(0).notNull(),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+});
+export type SupplierHealthSnapshot = typeof supplierHealthSnapshots.$inferSelect;
+export type InsertSupplierHealthSnapshot = typeof supplierHealthSnapshots.$inferInsert;
