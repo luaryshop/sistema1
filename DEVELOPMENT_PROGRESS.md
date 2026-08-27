@@ -135,3 +135,69 @@ O acesso ao preview inicialmente falhava porque o servidor havia sido iniciado s
 Durante a aplicação do baseline foi encontrado e corrigido um problema real de compatibilidade: quatro nomes de foreign keys excediam o limite de identificadores do MariaDB. As constraints foram encurtadas no `0000_absurd_hydra.sql` sem alterar a relação entre tabelas.
 
 O login foi testado com sucesso no endereço público temporário e a tela Command Center carregou corretamente.
+
+
+## Supply Engine — S1 a S3 (entrega incremental)
+
+Foi adicionado o primeiro núcleo do LUARY SUPPLY ENGINE sem duplicar Produto Mestre, Ofertas, SEO, Inventory Ledger ou Publication Gate. A migration `0005_mysterious_quentin_quire.sql` adiciona fornecedores, integrações com credenciais criptografadas, catálogo de fornecedor, mappings revisáveis, políticas de roteamento primário/backup, histórico de custo e estoque, alertas, purchase orders, itens de purchase order, grupos de fulfillment, itens de fulfillment, devoluções e snapshots de saúde do fornecedor.
+
+Foram criados `server/supply/engines.ts`, `server/supply/engines.test.ts`, `server/suppliers/supplierService.ts` e `server/sourcing/supplierMatchingService.ts`. O núcleo calcula Landed Cost, margem mínima, Supply Score, Opportunity Score, roteamento por disponibilidade/risco e Supply Gate com exceção somente para pré-venda explicitamente configurada. O catálogo de fornecedor é idempotente por `userId + supplierId + externalId`, e produtos sem match não geram Produto Mestre automaticamente.
+
+O router `supply` foi registrado no `appRouter`, com procedures para dashboard, fornecedores, integrações, catálogo, análise de custo/score/roteamento, mappings e políticas. A página `client/src/pages/Supply.tsx` foi adicionada ao Command Center com o caminho `/supply` e item de navegação lateral. O modo externo continua protegido pelo `Marketplace Safety Mode` e em `READ_ONLY` por padrão.
+
+Validação desta entrega: typecheck aprovado, 11 arquivos de teste, 32 testes aprovados e build aprovado.
+
+
+## Hardening S3.1 e início do S4 — Supply Adapter Framework
+
+A auditoria adicional encontrou um P0 no endpoint `supply.mappings.review`: `variantId` podia ser gravado sem validação equivalente de usuário e Produto Mestre. A correção agora consulta e exige variante existente, pertencente ao usuário atual e pertencente ao `productId` selecionado. A regra foi extraída para `server/supply/securityPolicy.ts` e coberta por testes.
+
+Mappings `unmatched` passaram a ser persistidos como classificação histórica, com `productId` nulo quando não existe candidato. A política de aprovação foi refinada: matches `probable` exigem uma etapa explícita `reviewed`; matches `exact` continuam conservadores por padrão e podem ser aprovados automaticamente somente com `AUTO_APPROVE_EXACT=true`.
+
+Foi iniciado o `Supplier Adapter Framework` separado dos adapters de marketplaces. O contrato `SupplierAdapter` e o `SupplierAdapterRegistry` foram criados, junto com adapters iniciais `ManualSupplierAdapter` e `CsvSupplierAdapter`. O CSV normaliza valores monetários para centavos, estoque e identificadores; a leitura é não destrutiva e não publica dados.
+
+Validação desta atualização: typecheck aprovado, 13 arquivos de teste, 39 testes aprovados. A próxima etapa permanece a implementação do Import Pipeline, sincronização de estoque de fornecedor e integração transacional com o Inventory Ledger.
+
+
+## Fase S3.2 — Hardening do parser CSV
+
+Foi corrigido um P0 no parser monetário do CSV. A conversão anterior removia todos os pontos antes de interpretar a vírgula, o que transformava `12.50` em valor 100 vezes maior. O novo `parseMoneyToCents` aceita `12,50`, `12.50`, `1.250,50`, `1,250.50`, `1250` e `R$ 12,50`, mantendo o domínio em centavos.
+
+Valores negativos, inválidos, não finitos e acima do limite operacional são rejeitados explicitamente. O CSV agora usa esse parser para custo e frete. Foram adicionados testes para todos os formatos críticos, negativos e overflow.
+
+Validação da S3.2: typecheck aprovado, 13 arquivos de teste, 40 testes aprovados. O próximo bloco recomendado é S4-A/S4-B: Connection Tester e Import Pipeline completo, com download/parsing/validação/normalização/upsert/histórico/matching/alertas.
+
+
+## Fase S3.2.1 — Migration & Supply Safety Hardening
+
+A auditoria S3.2.1 encontrou quatro foreign keys da migration `0005_mysterious_quentin_quire.sql` com nomes acima do limite de 64 caracteres do MariaDB/MySQL. Os nomes foram encurtados para identificadores estáveis (`fg_items_group_fk`, `sp_inv_hist_product_fk`, `sp_price_hist_product_fk` e `sp_mapping_product_fk`). Foi adicionado `server/migrationIdentifierLength.test.ts`, que percorre todas as migrations e falha automaticamente quando encontra uma constraint longa.
+
+O Supply Gate foi endurecido. A modalidade `pre_order` agora pode ignorar somente `stockReliable`, `shippingKnown` e `leadTimeKnown`; continua exigindo produto válido, fornecedor aprovado, vínculo, custo, margem, mídia, conteúdo e direitos autorizados. Foram adicionados testes para fornecedor bloqueado, margem inválida, mídia inválida e direitos não autorizados em pre-order.
+
+O CSV agora detecta automaticamente os delimitadores vírgula e ponto e vírgula, remove BOM UTF-8, aceita CRLF/LF, aspas escapadas e valida estoque como inteiro finito não negativo por meio de `parseStock`. O parser monetário permanece centralizado em `parseMoneyToCents`.
+
+Validação da S3.2.1: typecheck aprovado, 14 arquivos de teste e 44 testes aprovados. O modo de marketplace continua `READ_ONLY`; não há liberação de dropshipping automático ou sincronização direta de estoque para marketplace.
+
+
+## Fase S4-A — Connection Center e Supplier Adapter Runtime
+
+O runtime de fornecedores deixou de ser apenas um registry decorativo. Foi adicionada a matriz de capacidades (`CATALOG_READ`, `INVENTORY_READ`, `PRICE_READ`, `ORDER_CREATE`, `ORDER_READ`, `ORDER_CANCEL`, `TRACKING_READ`, `MEDIA_READ`) ao contrato `SupplierAdapter`. Os adapters Manual e CSV declaram somente as capacidades que realmente suportam.
+
+Foi criado `SupplierConnectionService`, que aplica ownership por usuário, descriptografa credenciais, instancia o adapter pelo registry, executa `authenticate()` e `testConnection()`, e persiste `testing`, `connected` ou `error` com a mensagem do último erro. `saveIntegration` não marca mais uma integração como ativa sem teste real; novas integrações ficam `pending` até o teste.
+
+O router `supply.suppliers.connections` expõe listagem protegida e teste de conexão protegido. A tela de fornecedores recebeu o Connection Center com tipo, status, última sincronização, último erro, capacidades e botão real de teste.
+
+A validação desta camada foi aprovada com typecheck, suíte completa e build. O runtime ainda não deve ser confundido com sincronização completa: o próximo marco é S4-B, com jobs assíncronos, `supplier_sync_runs`, import pipeline, histórico, matching e alertas.
+
+
+## S4-A.1 — Security & Runtime Hardening concluída
+
+A auditoria identificou um risco P0: a listagem de integrações retornava a linha completa de `supplier_integrations`, incluindo `encryptedCredentials`. O problema foi corrigido com projeção explícita e o DTO `toSafeSupplierIntegration`, que devolve somente os campos operacionais permitidos. Foi criado teste dedicado contra `encryptedCredentials`, `credentials`, `secret`, `token`, `password`, `apiKey`, `accessToken` e `refreshToken`.
+
+O `saveIntegration` agora não aceita `status` no contrato e sempre grava `pending` tanto em novas integrações quanto ao trocar credenciais. O router também foi ajustado para não repassar esse campo.
+
+A matriz de capabilities passou a ser resolvida pelo `SupplierAdapterRegistry.capabilities()` e retornada pelo endpoint `connections.list`; a interface agora renderiza dinamicamente capacidades presentes e ausentes, sem hardcode.
+
+Os snapshots Drizzle 0005/0006 foram alinhados à constraint curta `sp_mapping_product_fk`, e o teste de integridade passou a inspecionar SQL, snapshots e journal.
+
+Validação final da S4-A.1: typecheck aprovado, 15 arquivos de teste, 46 testes aprovados e build de produção aprovado. Marketplace permanece em `READ_ONLY`; S4-B continua sendo o próximo estágio para importação assíncrona real.
