@@ -5,13 +5,13 @@ import { LoginForm } from "@/components/LoginForm";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, Boxes, ChevronRight, CircleDollarSign, ClipboardList, Command, Gauge, GitCompareArrows, Globe2, LayoutDashboard, LogOut, Megaphone, PanelLeft, Search, Settings2, ShoppingBag, Sparkles, Tags, Warehouse, Workflow } from "lucide-react";
+import { BarChart3, Boxes, ChevronRight, CircleDollarSign, ClipboardList, Command, Factory, Gauge, GitCompareArrows, Globe2, LayoutDashboard, LogOut, Megaphone, PanelLeft, Search, Settings2, ShoppingBag, Sparkles, Tags, Warehouse, Workflow } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 const groups = [
   { label: "Visão geral", items: [{ icon: LayoutDashboard, label: "Command Center", path: "/dashboard" }, { icon: Gauge, label: "Operações", path: "/operacoes" }] },
-  { label: "Comercial", items: [{ icon: Boxes, label: "Produtos", path: "/produtos" }, { icon: ShoppingBag, label: "Pedidos", path: "/pedidos" }, { icon: CircleDollarSign, label: "Precificação", path: "/canais" }] },
+  { label: "Comercial", items: [{ icon: Boxes, label: "Produtos", path: "/produtos" }, { icon: ShoppingBag, label: "Pedidos", path: "/pedidos" }, { icon: CircleDollarSign, label: "Precificação", path: "/canais" }, { icon: Factory, label: "Supply Engine", path: "/supply" }] },
   { label: "Canais", items: [{ icon: Globe2, label: "Marketplaces", path: "/marketplaces" }, { icon: Megaphone, label: "Ofertas & anúncios", path: "/omnichannel" }, { icon: GitCompareArrows, label: "Conflitos", path: "/operacoes" }] },
   { label: "Inteligência", items: [{ icon: Search, label: "SEO avançado", path: "/seo-avancado" }, { icon: Tags, label: "Cadastros", path: "/cadastros" }] },
 ];

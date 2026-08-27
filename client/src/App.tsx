@@ -14,6 +14,8 @@ import SalesChannels from "@/pages/SalesChannels";
 import Omnichannel from "@/pages/Omnichannel";
 import SEOAdvanced from "@/pages/SEOAdvanced";
 import Operations from "./pages/Operations";
+import Supply from "./pages/Supply";
+import SupplySection from "./pages/SupplySection";
 import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
@@ -29,6 +31,8 @@ function Router() {
       <Route path="/omnichannel"><DashboardLayout><Omnichannel /></DashboardLayout></Route>
       <Route path="/seo-avancado"><DashboardLayout><SEOAdvanced /></DashboardLayout></Route>
       <Route path="/operacoes"><DashboardLayout><Operations /></DashboardLayout></Route>
+      <Route path="/supply"><DashboardLayout><Supply /></DashboardLayout></Route>
+      <Route path="/supply/:section"><DashboardLayout><SupplySection /></DashboardLayout></Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
