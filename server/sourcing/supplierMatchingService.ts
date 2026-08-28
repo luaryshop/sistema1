@@ -29,7 +29,7 @@ export class SupplierMatchingService {
     const autoApproved = result.matchClass === "exact" && shouldAutoApproveExact(process.env.AUTO_APPROVE_EXACT);
     const status = autoApproved ? "approved" as const : "pending_review" as const;
     const current = await db.select({ id: supplierProductMappings.id }).from(supplierProductMappings).where(and(eq(supplierProductMappings.userId, userId), eq(supplierProductMappings.supplierProductId, supplierProductId))).limit(1);
-    const values = { productId: result.productId ?? null, variantId: result.variantId ?? null, confidence: result.confidence, matchType: result.matchClass, status, ...(autoApproved ? { reviewedAt: new Date() } : {}), updatedAt: new Date() };
+    const values = { productId: result.productId ?? null, variantId: result.variantId ?? null, confidence: result.confidence, matchType: result.matchClass, matchEvidence: JSON.stringify({ evidence: result.evidence ?? [], reason: result.reason }), matchCandidates: JSON.stringify(result.candidates ?? []), candidateGap: result.candidateGap ?? null, status, ...(autoApproved ? { reviewedAt: new Date() } : {}), updatedAt: new Date() };
     if (current.length) await db.update(supplierProductMappings).set(values).where(and(eq(supplierProductMappings.id, current[0].id), eq(supplierProductMappings.userId, userId)));
     else await db.insert(supplierProductMappings).values({ ...values, userId, supplierProductId });
     return { ...result, reviewRequired: !autoApproved, status };

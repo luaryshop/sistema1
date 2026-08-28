@@ -5,6 +5,7 @@ import { ProductSyncService } from "./productSyncService";
 import { OrderSyncService } from "./orderSyncService";
 import { SupportedMarketplace } from "../adapters/AdapterFactory";
 import { MarketplaceRateLimiter } from "./rateLimiter";
+import { SupplierImportService } from "../suppliers/supplierImportService";
 
 const MAX_ATTEMPTS = 5;
 const backoffMinutes = (attempt: number) => Math.min(60, 2 ** Math.max(0, attempt - 1));
@@ -24,7 +25,12 @@ export class SyncJobService {
       );
       try {
         const payload = job.payload ? JSON.parse(job.payload) as Record<string, unknown> : {};
-        await MarketplaceRateLimiter.acquire(`connection:${job.marketplaceConnectionId || "internal"}`);
+        if (job.type === "supplier_catalog") {
+          if (typeof payload.runId !== "number" || typeof payload.integrationId !== "number") throw new Error("Payload de importação de fornecedor incompleto");
+          await SupplierImportService.processRun(userId, payload.runId, payload.integrationId);
+        } else {
+          await MarketplaceRateLimiter.acquire(`connection:${job.marketplaceConnectionId || "internal"}`);
+        }
         if (job.type === "stock") {
           if (!job.marketplaceConnectionId || !job.productId || typeof payload.listingId !== "string" || typeof payload.stock !== "number") {
             throw new Error("Payload de atualização de estoque incompleto");
@@ -40,7 +46,7 @@ export class SyncJobService {
           const connection = await db.select().from(marketplaceConnections).where(eq(marketplaceConnections.id, job.marketplaceConnectionId)).limit(1);
           if (!connection.length) throw new Error("Conexão do marketplace não encontrada");
           await OrderSyncService.importOrdersFromMarketplace(userId, connection[0].marketplaceType as SupportedMarketplace);
-        } else {
+        } else if (job.type !== "supplier_catalog") {
           throw new Error(`Tipo de job ainda não suportado pelo worker: ${job.type}`);
         }
         await db.update(syncJobs).set({ status: "completed", completedAt: new Date(), updatedAt: new Date() }).where(eq(syncJobs.id, job.id));

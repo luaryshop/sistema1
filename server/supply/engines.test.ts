@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { calculateLandedCost, calculateMargin, calculateOpportunityScore, calculateSupplyScore, evaluateSupplyGate, routeSupply } from "./engines";
+import { calculateLandedCost, calculateMargin, calculateMinimumSalePrice, calculateOpportunityScore, calculateSupplyScore, evaluateSupplyGate, routeSupply } from "./engines";
 
 describe("Supply Engine", () => {
   it("calcula landed cost somando todos os componentes em centavos", () => {
     expect(calculateLandedCost({ supplierCostCents: 1000, supplierShippingCents: 200, marketplaceFeesCents: 150, paymentFeesCents: 50, taxesCents: 100, operationalCostCents: 25, packagingCents: 75, expectedReturnCostCents: 40, riskReserveCents: 60 }).realCostCents).toBe(1700);
+  });
+
+  it("calcula preço mínimo com taxas percentuais e margem mínima", () => {
+    const minimum = calculateMinimumSalePrice({ fixedCostCents: 10000, marketplaceFeeBp: 1200, paymentFeeBp: 300, taxBp: 500, minimumMarginBp: 1500 });
+    expect(minimum.valid).toBe(true);
+    expect(minimum.minimumSalePriceCents).toBe(15385);
+  });
+
+  it("bloqueia preço mínimo quando as taxas atingem 100%", () => {
+    expect(calculateMinimumSalePrice({ fixedCostCents: 1000, marketplaceFeeBp: 10000 }).valid).toBe(false);
   });
 
   it("bloqueia margem abaixo do mínimo", () => {

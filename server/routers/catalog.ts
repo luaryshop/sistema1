@@ -314,7 +314,8 @@ const seoRouter = router({
       const db = requireDatabase(await getDb());
       const existing = await db.select({ id: seoSettings.id }).from(seoSettings).where(and(eq(seoSettings.userId, ctx.user.id), eq(seoSettings.pageKey, input.pageKey))).limit(1);
       if (existing[0]) {
-        await db.update(seoSettings).set(input).where(eq(seoSettings.id, existing[0].id));
+        const { pageKey: _pageKey, ...fields } = input;
+        await db.update(seoSettings).set(fields).where(and(eq(seoSettings.id, existing[0].id), eq(seoSettings.userId, ctx.user.id)));
         return { id: existing[0].id, success: true };
       }
       const result = await db.insert(seoSettings).values({ userId: ctx.user.id, ...input });

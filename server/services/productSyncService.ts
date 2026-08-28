@@ -8,6 +8,7 @@ import { MarketplaceService } from "./marketplaceService";
 import { PublishProductPayload, UpdatePricePayload, UpdateStockPayload } from "../adapters/types";
 import { SupportedMarketplace } from "../adapters/AdapterFactory";
 import { assertMarketplaceWriteEnabled } from "./marketplaceSafetyService";
+import { InventoryService } from "./inventoryService";
 
 /**
  * Product Sync Service
@@ -60,11 +61,12 @@ export class ProductSyncService {
       const adapter = await MarketplaceService.getAdapter(connection);
 
       const media = validatePublicationMedia(await resolveProductMedia(userId, productId));
+      const availability = await InventoryService.availableToSell(userId, productId);
       const payload: PublishProductPayload = {
         title: prod.name,
         description: prod.description || "",
         price: prod.basePrice || 0,
-        stock: prod.stock || 0,
+        stock: availability.available,
         sku: prod.sku,
         images: media.images,
         brand: prod.brand || undefined,
@@ -83,7 +85,7 @@ export class ProductSyncService {
         title: prod.name,
         description: prod.description || undefined,
         price: prod.basePrice || 0,
-        stock: prod.stock || 0,
+        stock: availability.available,
         status: "active",
         listingUrl: result.listingUrl,
         lastPublishedAt: result.publishedAt,
@@ -226,11 +228,10 @@ export class ProductSyncService {
       // Get adapter
       const adapter = await MarketplaceService.getAdapter(connection);
 
-      // Update stock
-      const payload: UpdateStockPayload = {
-        listingId,
-        stock: newStock,
-      };
+      // Update stock from unified ATS when the listing is linked to a master product.
+      const listing = await db.select({ productId: marketplaceListings.productId }).from(marketplaceListings).where(and(eq(marketplaceListings.marketplaceConnectionId, marketplaceConnectionId), eq(marketplaceListings.marketplaceListingId, listingId))).limit(1);
+      const effectiveStock = listing.length ? (await InventoryService.availableToSell(userId, listing[0].productId)).available : Math.max(0, newStock);
+      const payload: UpdateStockPayload = { listingId, stock: effectiveStock };
 
       await adapter.updateStock(accessToken, payload);
 
@@ -240,7 +241,7 @@ export class ProductSyncService {
         marketplaceConnectionId,
         syncType: "stock_sync",
         status: "success",
-        metadata: JSON.stringify({ listingId, newStock }),
+        metadata: JSON.stringify({ listingId, newStock: effectiveStock }),
       });
 
       return { success: true };

@@ -6,6 +6,19 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 
 export const operationsRouter = router({
+  readiness: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { ready: false, marketplaceMode: process.env.MARKETPLACE_MODE || "READ_ONLY", database: false, workerConfigured: false, pendingJobs: 0, blockedReasons: ["Banco indisponível"] };
+    const pending = await db.select({ count: sql<number>`count(*)` }).from(syncJobs).where(and(eq(syncJobs.userId, ctx.user.id), eq(syncJobs.status, "pending")));
+    const marketplaceMode = process.env.MARKETPLACE_MODE || "READ_ONLY";
+    const pendingJobs = Number(pending[0]?.count ?? 0);
+    const workerConfigured = Boolean(process.env.WORKER_INTERVAL_MS || process.env.WORKER_BATCH_SIZE || process.env.NODE_ENV !== "production");
+    const blockedReasons = [
+      ...(marketplaceMode !== "READ_ONLY" ? ["Homologação deve iniciar em READ_ONLY"] : []),
+      ...(!workerConfigured ? ["Worker não configurado"] : []),
+    ];
+    return { ready: blockedReasons.length === 0, marketplaceMode, database: true, workerConfigured, pendingJobs, blockedReasons };
+  }),
   overview: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
     const [jobs, recentJobs, logs, webhooks, reservations] = await Promise.all([

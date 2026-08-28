@@ -28,6 +28,22 @@ export function calculateLandedCost(input: LandedCostInput) {
   return { ...components, realCostCents };
 }
 
+export type MinimumPriceInput = {
+  fixedCostCents: number;
+  marketplaceFeeBp?: number;
+  paymentFeeBp?: number;
+  taxBp?: number;
+  minimumMarginBp?: number;
+};
+
+export function calculateMinimumSalePrice(input: MinimumPriceInput) {
+  const fixedCostCents = Math.max(0, Math.ceil(input.fixedCostCents));
+  const totalRateBp = Math.max(0, (input.marketplaceFeeBp ?? 0) + (input.paymentFeeBp ?? 0) + (input.taxBp ?? 0) + (input.minimumMarginBp ?? 0));
+  if (totalRateBp >= 10_000) return { minimumSalePriceCents: null, fixedCostCents, totalRateBp, valid: false, reason: "taxas e margem mínima atingem ou excedem 100%" };
+  const minimumSalePriceCents = Math.ceil(fixedCostCents / (1 - totalRateBp / 10_000));
+  return { minimumSalePriceCents, fixedCostCents, totalRateBp, valid: true, reason: null };
+}
+
 export type MarginResult = {
   salePriceCents: number;
   landedCostCents: number;
