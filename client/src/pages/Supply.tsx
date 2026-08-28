@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Boxes, ChevronRight, Factory, Gauge, Layers3, PackageSearch, RefreshCw, ShieldCheck, Truck, WalletCards } from "lucide-react";
+import { Boxes, ChevronRight, Factory, Gauge, Layers3, PackageSearch, RefreshCw, ShieldAlert, ShieldCheck, Sparkles, Truck, WalletCards } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 
@@ -16,14 +16,14 @@ export default function Supply() {
   return <div className="mx-auto max-w-[1500px] space-y-7">
     <section className="relative overflow-hidden rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-950/10 md:px-9 md:py-8">
       <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" /><div className="absolute bottom-[-100px] right-[22%] h-56 w-56 rounded-full bg-blue-500/15 blur-3xl" />
-      <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end"><div><div className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300"><Factory className="h-3.5 w-3.5" /> Luary Supply Engine</div><h1 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] md:text-4xl">Abasteça melhor. Venda com confiança.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">Fornecedores, custo real, disponibilidade, risco e fulfillment conectados ao Produto Mestre — sem duplicar seu estoque ou publicar sem aprovação.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => navigate("/supply/suppliers")} className="rounded-xl bg-white text-slate-950 hover:bg-slate-100"><Factory className="mr-2 h-4 w-4" /> Fornecedores</Button><Button onClick={() => refetch()} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"><RefreshCw className="mr-2 h-4 w-4" /> Atualizar visão</Button></div></div>
+      <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end"><div><div className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300"><Factory className="h-3.5 w-3.5" /> Luary Supply Engine</div><h1 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] md:text-4xl">Abasteça melhor. Venda com confiança.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">Fornecedores, custo real, disponibilidade, risco e fulfillment conectados ao Produto Mestre — sem duplicar seu estoque ou publicar sem aprovação.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => navigate("/supply/suppliers")} className="rounded-xl bg-white text-slate-950 hover:bg-slate-100"><Factory className="mr-2 h-4 w-4" /> Fornecedores</Button><Button onClick={() => navigate("/supply/alerts")} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"><ShieldAlert className="mr-2 h-4 w-4" /> Alertas</Button><Button onClick={() => navigate("/supply/affiliates")} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"><Sparkles className="mr-2 h-4 w-4" /> Afiliados</Button><Button onClick={() => refetch()} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"><RefreshCw className="mr-2 h-4 w-4" /> Atualizar visão</Button></div></div>
     </section>
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Fornecedores" value={isLoading ? "—" : String(summary?.suppliers ?? 0)} detail="Fontes cadastradas" icon={Factory} tone="emerald" />
       <Metric label="Produtos de origem" value={isLoading ? "—" : String(summary?.products ?? 0)} detail="Catálogo externo" icon={Boxes} tone="blue" />
       <Metric label="Dropshipping" value={isLoading ? "—" : String(summary?.dropshipping ?? 0)} detail="Políticas ativas" icon={Truck} tone="violet" />
-      <Metric label="Alertas críticos" value={isLoading ? "—" : String(summary?.blockedSuppliers ?? 0)} detail="Fornecedores bloqueados" icon={ShieldCheck} tone="rose" />
+      <Metric label="Alertas críticos" value={isLoading ? "—" : String(summary?.blockedSuppliers ?? 0)} detail="Fornecedores bloqueados" icon={ShieldCheck} tone="rose" /><Metric label="Imports em execução" value={isLoading ? "—" : String(summary?.runningImports ?? 0)} detail={`${summary?.openAlerts ?? 0} alertas abertos`} icon={ShieldAlert} tone="rose" />
     </section>
 
     <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
