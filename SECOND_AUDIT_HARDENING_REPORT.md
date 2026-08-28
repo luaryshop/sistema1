@@ -181,3 +181,11 @@ A matriz de capabilities foi centralizada no `SupplierAdapterRegistry.capabiliti
 Os snapshots Drizzle 0005/0006 foram alinhados à constraint curta `sp_mapping_product_fk`. O teste de integridade passou a validar SQL, snapshots e journal.
 
 Validação: typecheck aprovado, 15 arquivos de teste, 46 testes aprovados e build de produção aprovado. Permanecem deliberadamente para S4-B os schemas Zod específicos por adapter, armazenamento de CSV fora de credenciais, parser CSV orientado por linha com respeito a aspas, métricas de conexão, sincronização real, Import Pipeline assíncrono, histórico, matching e Inventory Ledger. O modo externo continua `READ_ONLY`.
+
+## Atualização — S4-B Import Pipeline assíncrono
+
+A fundação da S4-B foi implementada de forma aditiva. `supplier_sync_runs` registra cada execução; `supplier_import_items` conserva payload bruto, payload normalizado e erros; `SupplierImportService` usa validação Zod, upsert idempotente, histórico de preço/estoque apenas quando há mudança e matching com revisão humana.
+
+O worker passou a despachar jobs `supplier_catalog` usando a fila durável existente, com lock, retry e backoff. O Connection Center lista os últimos runs e permite enfileirar uma importação somente para conexão `connected` com capability `CATALOG_READ`. A migration `0007_fat_franklin_storm.sql` foi aplicada apenas ao banco de preview.
+
+Validação: typecheck aprovado, 16 arquivos de teste, 49 testes aprovados e build de produção aprovado. A S4-B ainda não está integralmente concluída: permanecem storage de feeds fora das credenciais, ingestão remota/streaming, progresso granular, DLQ/observabilidade de jobs, conciliação visual dedicada e testes de contrato com fornecedor real. O sistema segue em `MARKETPLACE_MODE=READ_ONLY`.

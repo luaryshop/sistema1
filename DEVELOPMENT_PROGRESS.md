@@ -201,3 +201,41 @@ A matriz de capabilities passou a ser resolvida pelo `SupplierAdapterRegistry.ca
 Os snapshots Drizzle 0005/0006 foram alinhados à constraint curta `sp_mapping_product_fk`, e o teste de integridade passou a inspecionar SQL, snapshots e journal.
 
 Validação final da S4-A.1: typecheck aprovado, 15 arquivos de teste, 46 testes aprovados e build de produção aprovado. Marketplace permanece em `READ_ONLY`; S4-B continua sendo o próximo estágio para importação assíncrona real.
+
+## S4-B — Import Pipeline assíncrono: primeira entrega operacional
+
+Foram adicionadas as tabelas `supplier_sync_runs` e `supplier_import_items` na migration `0007_fat_franklin_storm.sql`. O novo `SupplierImportService` cria runs duráveis, enfileira jobs `supplier_catalog`, valida registros com Zod, conserva payload bruto e normalizado, faz upsert idempotente em `supplier_products`, grava histórico de custo/estoque somente quando há alteração e aciona o matching com revisão humana.
+
+O worker passou a despachar `supplier_catalog` usando a mesma fila durável, lock, retry e backoff existentes. O Connection Center ganhou consulta dos últimos runs e ação de importação condicionada a conexão `connected` e capability `CATALOG_READ`. A interface passou a usar capabilities dinâmicas, sem lista fixa de permissões.
+
+A migration foi aplicada apenas ao banco de preview. Validação: typecheck aprovado, 16 arquivos de teste, 49 testes aprovados e build de produção aprovado. A S4-B ainda não está completa: permanecem storage de arquivos fora de credenciais, feeds remotos/streaming, progresso granular, DLQ observável, conciliação visual dedicada e testes com fornecedor real.
+
+## Etapas 2 e 3 — ATS e preparação interna de fulfillment
+
+O `InventoryService` passou a expor `availableToSell`, combinando estoque próprio, reservas, mappings aprovados de fornecedor, buffer, status do fornecedor e idade do último sync. Fontes bloqueadas ou desatualizadas não contribuem para ATS. O `ProductSyncService` passou a consultar ATS na publicação e na atualização de estoque, embora o modo global continue bloqueando qualquer escrita externa.
+
+Foi criado `SupplierFulfillmentService.prepareForOrder`, que seleciona fornecedor aprovado conforme policy, estoque confiável, prioridade e `autoFulfillmentAllowed`, e cria Purchase Order e grupo de fulfillment em `awaiting_approval`. Nenhuma ordem é enviada ao fornecedor; tracking, aprovação externa e devolução continuam pendentes para as próximas incrementações.
+
+Validação parcial das etapas: typecheck aprovado, 17 arquivos de teste, 52 testes aprovados e build aprovado.
+
+
+## Gabarito Master — hardening e rastreabilidade S4-B
+
+A execução do Gabarito Master adicionou inventário técnico persistido em `MASTER_INVENTORY.md` e auditoria de segurança em `MASTER_SECURITY_AUDIT.md`. Foi corrigido o update de SEO para reforçar ownership por `userId` e evitar mass assignment.
+
+O pipeline S4-B passou a registrar `sourceType`, `sourceReference`, `fileHash`, estágio, progresso e contadores de registros. Reimportações sem alteração são detectadas por hash e finalizadas como `skipped_unchanged`, sem duplicar produtos ou históricos. Falhas por registro são isoladas em `failed_import_records` com payload sanitizado, código, tentativas e status; foram adicionadas procedures protegidas para listar a dead-letter e solicitar retry do run.
+
+Os históricos de preço e estoque receberam valor anterior, diferença, origem e vínculo ao `importId`, além de consultas protegidas no router Supply. O pipeline registra `IMPORT_STARTED`, `IMPORT_COMPLETED` e `IMPORT_FAILED` pelo mecanismo de auditoria existente, sem incluir credenciais.
+
+Foram geradas e aplicadas somente no banco de preview as migrations `0008_master_import_metadata.sql`, `0009_master_failed_import_records.sql` e `0010_master_history_traceability.sql`. Validação da rodada: typecheck aprovado, 17 arquivos de teste, 52 testes aprovados e build de produção aprovado. `MARKETPLACE_MODE=READ_ONLY` continua obrigatório.
+
+
+## Gabarito Master — evolução operacional
+
+- O fluxo interno de pedidos/fulfillment recebeu transições protegidas e explícitas, tracking, cancelamento por estado permitido e abertura de devoluções com ownership. Nenhuma ação envia pedido a fornecedor ou marketplace.
+- O Supply Engine recebeu cálculo de preço mínimo em centavos, considerando custo fixo, taxas percentuais, impostos e margem mínima; resultados matematicamente inviáveis são bloqueados.
+- Foram criados módulos persistentes de afiliados com fontes, links, eventos idempotentes, conversões, receita e comissão separadas das vendas próprias.
+- O dashboard Supply passou a exibir imports em execução e alertas abertos; alertas possuem listagem protegida e resolução por ownership. A UI ganhou as seções Alertas Operacionais e Afiliados.
+- A linhagem Drizzle foi corrigida: reservas por fonte e afiliados estão em uma única migration `0012_master_source_reservations_affiliates.sql`, com constraint curta `inv_res_supplier_fk`; referências longas residuais foram eliminadas.
+- Validação mais recente: `pnpm check` aprovado, 17 arquivos de teste e 54 testes aprovados, `pnpm build` aprovado com `dist/index.js` e `dist/worker.js`.
+- A publicação externa continua bloqueada por `MARKETPLACE_MODE=READ_ONLY`.
