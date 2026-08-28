@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { foreignKey, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -643,6 +643,8 @@ export const inventoryReservations = mysqlTable("inventory_reservations", {
   userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: int("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   variantId: int("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+  supplierProductId: int("supplier_product_id").references(() => supplierProducts.id, { onDelete: "set null" }),
+  sourceType: varchar("source_type", { length: 30 }).default("own_stock").notNull(),
   orderId: int("order_id").references(() => orders.id, { onDelete: "set null" }),
   quantity: int("quantity").notNull(),
   status: varchar("status", { length: 30 }).default("reserved").notNull(),
@@ -650,7 +652,9 @@ export const inventoryReservations = mysqlTable("inventory_reservations", {
   releasedAt: timestamp("released_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  reservationSupplierFk: foreignKey({ columns: [table.supplierProductId], foreignColumns: [supplierProducts.id], name: "inv_res_supplier_fk" }).onDelete("set null"),
+}));
 export type InventoryReservation = typeof inventoryReservations.$inferSelect;
 export type InsertInventoryReservation = typeof inventoryReservations.$inferInsert;
 
@@ -765,6 +769,41 @@ export const supplierIntegrations = mysqlTable("supplier_integrations", {
 export type SupplierIntegration = typeof supplierIntegrations.$inferSelect;
 export type InsertSupplierIntegration = typeof supplierIntegrations.$inferInsert;
 
+/** Durable supplier catalog import execution. */
+export const supplierSyncRuns = mysqlTable("supplier_sync_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  integrationId: int("integration_id").notNull().references(() => supplierIntegrations.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 30 }).default("queued").notNull(),
+  mode: varchar("mode", { length: 30 }).default("catalog").notNull(),
+  sourceType: varchar("source_type", { length: 30 }).default("adapter").notNull(),
+  sourceReference: varchar("source_reference", { length: 500 }),
+  fileHash: varchar("file_hash", { length: 128 }),
+  currentStage: varchar("current_stage", { length: 40 }).default("queued").notNull(),
+  progressPercent: int("progress_percent").default(0).notNull(),
+  totalRecords: int("total_records").default(0).notNull(),
+  processedRecords: int("processed_records").default(0).notNull(),
+  successRecords: int("success_records").default(0).notNull(),
+  matchedRecords: int("matched_records").default(0).notNull(),
+  unmatchedRecords: int("unmatched_records").default(0).notNull(),
+  skippedRecords: int("skipped_records").default(0).notNull(),
+  productsRead: int("products_read").default(0).notNull(),
+  productsCreated: int("products_created").default(0).notNull(),
+  productsUpdated: int("products_updated").default(0).notNull(),
+  errorsCount: int("errors_count").default(0).notNull(),
+  errorSummary: text("error_summary"),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierSyncRunUserIdx: `KEY supplier_sync_runs_user_status_idx (user_id, status)`,
+}));
+export type SupplierSyncRun = typeof supplierSyncRuns.$inferSelect;
+export type InsertSupplierSyncRun = typeof supplierSyncRuns.$inferInsert;
+
 /** Supplier catalog rows; never replaces the Luary Product Master. */
 export const supplierProducts = mysqlTable("supplier_products", {
   id: int("id").autoincrement().primaryKey(),
@@ -801,15 +840,60 @@ export const supplierProducts = mysqlTable("supplier_products", {
 export type SupplierProduct = typeof supplierProducts.$inferSelect;
 export type InsertSupplierProduct = typeof supplierProducts.$inferInsert;
 
+/** Raw and normalized records retained during supplier import before upsert/matching. */
+export const supplierImportItems = mysqlTable("supplier_import_items", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  runId: int("run_id").notNull().references(() => supplierSyncRuns.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  externalId: varchar("external_id", { length: 255 }).notNull(),
+  rawPayload: text("raw_payload").notNull(),
+  normalizedPayload: text("normalized_payload"),
+  validationStatus: varchar("validation_status", { length: 30 }).default("pending").notNull(),
+  errorCode: varchar("error_code", { length: 60 }),
+  attempts: int("attempts").default(0).notNull(),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  supplierImportItemUnique: uniqueIndex("supplier_import_items_run_external").on(table.runId, table.externalId),
+  supplierImportItemStatusIdx: `KEY supplier_import_items_run_status_idx (run_id, validation_status)`,
+}));
+export type SupplierImportItem = typeof supplierImportItems.$inferSelect;
+export type InsertSupplierImportItem = typeof supplierImportItems.$inferInsert;
+
+/** Isolated supplier import failures for retry and diagnosis without blocking the run. */
+export const failedImportRecords = mysqlTable("failed_import_records", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  runId: int("run_id").notNull().references(() => supplierSyncRuns.id, { onDelete: "cascade" }),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  recordReference: varchar("record_reference", { length: 255 }).notNull(),
+  payloadSanitized: text("payload_sanitized"),
+  errorCode: varchar("error_code", { length: 60 }).notNull(),
+  errorMessage: text("error_message").notNull(),
+  attempts: int("attempts").default(1).notNull(),
+  status: varchar("status", { length: 30 }).default("open").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  failedImportRunIdx: `KEY failed_import_records_run_status_idx (run_id, status)`,
+}));
+export type FailedImportRecord = typeof failedImportRecords.$inferSelect;
+export type InsertFailedImportRecord = typeof failedImportRecords.$inferInsert;
+
 /** Human-reviewed supplier product to Product Master relationship. */
 export const supplierProductMappings = mysqlTable("supplier_product_mappings", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  supplierProductId: int("supplier_product_id").notNull(),
   productId: int("product_id").references(() => products.id, { onDelete: "set null" }),
   variantId: int("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
   confidence: int("confidence").default(0).notNull(),
   matchType: varchar("match_type", { length: 30 }).default("unmatched").notNull(),
+  matchEvidence: text("match_evidence"),
+  matchCandidates: text("match_candidates"),
+  candidateGap: int("candidate_gap"),
   status: varchar("status", { length: 30 }).default("pending_review").notNull(),
   reviewedBy: int("reviewed_by").references(() => users.id, { onDelete: "set null" }),
   reviewedAt: timestamp("reviewed_at"),
@@ -818,6 +902,7 @@ export const supplierProductMappings = mysqlTable("supplier_product_mappings", {
 }, (table) => ({
   supplierProductMappingUnique: uniqueIndex("supplier_product_mapping_unique").on(table.userId, table.supplierProductId),
   supplierMappingProductIdx: `KEY supplier_product_mapping_product_idx (product_id, status)`,
+  supplierProductMappingSupplierFk: foreignKey({ columns: [table.supplierProductId], foreignColumns: [supplierProducts.id], name: "sp_mapping_product_fk" }).onDelete("cascade"),
 }));
 export type SupplierProductMapping = typeof supplierProductMappings.$inferSelect;
 export type InsertSupplierProductMapping = typeof supplierProductMappings.$inferInsert;
@@ -849,8 +934,11 @@ export const supplierPriceHistory = mysqlTable("supplier_price_history", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  previousCostCents: int("previous_cost_cents"),
   costCents: int("cost_cents").notNull(),
   shippingCostCents: int("shipping_cost_cents").default(0).notNull(),
+  source: varchar("source", { length: 60 }).default("supplier_import").notNull(),
+  importId: int("import_id").references(() => supplierSyncRuns.id, { onDelete: "set null" }),
   recordedAt: timestamp("recorded_at").defaultNow().notNull(),
 });
 export type SupplierPriceHistory = typeof supplierPriceHistory.$inferSelect;
@@ -860,7 +948,11 @@ export const supplierInventoryHistory = mysqlTable("supplier_inventory_history",
   id: int("id").autoincrement().primaryKey(),
   userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   supplierProductId: int("supplier_product_id").notNull().references(() => supplierProducts.id, { onDelete: "cascade" }),
+  previousStock: int("previous_stock"),
   stock: int("stock").notNull(),
+  difference: int("difference"),
+  source: varchar("source", { length: 60 }).default("supplier_import").notNull(),
+  importId: int("import_id").references(() => supplierSyncRuns.id, { onDelete: "set null" }),
   recordedAt: timestamp("recorded_at").defaultNow().notNull(),
 });
 export type SupplierInventoryHistory = typeof supplierInventoryHistory.$inferSelect;
@@ -978,3 +1070,50 @@ export const supplierHealthSnapshots = mysqlTable("supplier_health_snapshots", {
 });
 export type SupplierHealthSnapshot = typeof supplierHealthSnapshots.$inferSelect;
 export type InsertSupplierHealthSnapshot = typeof supplierHealthSnapshots.$inferInsert;
+
+
+/** Affiliate sources and links are isolated from marketplace sales and own revenue. */
+export const affiliateSources = mysqlTable("affiliate_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 150 }).notNull(),
+  network: varchar("network", { length: 80 }).notNull(),
+  status: varchar("status", { length: 30 }).default("active").notNull(),
+  commissionBp: int("commission_bp").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type AffiliateSource = typeof affiliateSources.$inferSelect;
+export type InsertAffiliateSource = typeof affiliateSources.$inferInsert;
+
+export const affiliateLinks = mysqlTable("affiliate_links", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sourceId: int("source_id").notNull().references(() => affiliateSources.id, { onDelete: "cascade" }),
+  productId: int("product_id").references(() => products.id, { onDelete: "set null" }),
+  slug: varchar("slug", { length: 180 }).notNull(),
+  destinationUrl: text("destination_url").notNull(),
+  status: varchar("status", { length: 30 }).default("active").notNull(),
+  clicks: int("clicks").default(0).notNull(),
+  conversions: int("conversions").default(0).notNull(),
+  revenueCents: int("revenue_cents").default(0).notNull(),
+  commissionCents: int("commission_cents").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({ affiliateLinkSlugUnique: uniqueIndex("affiliate_link_user_slug").on(table.userId, table.slug) }));
+export type AffiliateLink = typeof affiliateLinks.$inferSelect;
+export type InsertAffiliateLink = typeof affiliateLinks.$inferInsert;
+
+export const affiliateEvents = mysqlTable("affiliate_events", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  linkId: int("link_id").notNull().references(() => affiliateLinks.id, { onDelete: "cascade" }),
+  eventType: varchar("event_type", { length: 30 }).notNull(),
+  externalEventId: varchar("external_event_id", { length: 255 }),
+  amountCents: int("amount_cents").default(0).notNull(),
+  commissionCents: int("commission_cents").default(0).notNull(),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({ affiliateEventIdUnique: uniqueIndex("affiliate_event_user_external").on(table.userId, table.externalEventId) }));
+export type AffiliateEvent = typeof affiliateEvents.$inferSelect;
+export type InsertAffiliateEvent = typeof affiliateEvents.$inferInsert;

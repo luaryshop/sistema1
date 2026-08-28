@@ -403,8 +403,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "fulfillment_group_items_fulfillment_group_id_fulfillment_groups_id_fk": {
-          "name": "fulfillment_group_items_fulfillment_group_id_fulfillment_groups_id_fk",
+        "fg_item_group_fk": {
+          "name": "fg_item_group_fk",
           "tableFrom": "fulfillment_group_items",
           "tableTo": "fulfillment_groups",
           "columnsFrom": [
@@ -1528,8 +1528,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "listing_import_staging_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "listing_import_staging_marketplace_connection_id_marketplace_connections_id_fk",
+        "staging_mkt_conn_fk": {
+          "name": "staging_mkt_conn_fk",
           "tableFrom": "listing_import_staging",
           "tableTo": "marketplace_connections",
           "columnsFrom": [
@@ -3613,8 +3613,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "purchase_order_items_supplier_product_id_supplier_products_id_fk": {
-          "name": "purchase_order_items_supplier_product_id_supplier_products_id_fk",
+        "po_item_supplier_fk": {
+          "name": "po_item_supplier_fk",
           "tableFrom": "purchase_order_items",
           "tableTo": "supplier_products",
           "columnsFrom": [
@@ -4509,8 +4509,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "supplier_inventory_history_supplier_product_id_supplier_products_id_fk": {
-          "name": "supplier_inventory_history_supplier_product_id_supplier_products_id_fk",
+        "si_hist_supplier_fk": {
+          "name": "si_hist_supplier_fk",
           "tableFrom": "supplier_inventory_history",
           "tableTo": "supplier_products",
           "columnsFrom": [
@@ -4597,8 +4597,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "supplier_price_history_supplier_product_id_supplier_products_id_fk": {
-          "name": "supplier_price_history_supplier_product_id_supplier_products_id_fk",
+        "sp_hist_supplier_fk": {
+          "name": "sp_hist_supplier_fk",
           "tableFrom": "supplier_price_history",
           "tableTo": "supplier_products",
           "columnsFrom": [
@@ -5352,8 +5352,8 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "supply_alerts_supplier_product_id_supplier_products_id_fk": {
-          "name": "supply_alerts_supplier_product_id_supplier_products_id_fk",
+        "supply_alert_supplier_fk": {
+          "name": "supply_alert_supplier_fk",
           "tableFrom": "supply_alerts",
           "tableTo": "supplier_products",
           "columnsFrom": [
@@ -5899,8 +5899,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "sync_jobs_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "sync_jobs_marketplace_connection_id_marketplace_connections_id_fk",
+        "sync_jobs_mkt_conn_fk": {
+          "name": "sync_jobs_mkt_conn_fk",
           "tableFrom": "sync_jobs",
           "tableTo": "marketplace_connections",
           "columnsFrom": [
@@ -6302,8 +6302,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "webhook_events_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "webhook_events_marketplace_connection_id_marketplace_connections_id_fk",
+        "webhook_mkt_conn_fk": {
+          "name": "webhook_mkt_conn_fk",
           "tableFrom": "webhook_events",
           "tableTo": "marketplace_connections",
           "columnsFrom": [

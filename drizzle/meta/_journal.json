@@ -50,6 +50,48 @@
       "when": 1787848777834,
       "tag": "0006_flat_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787872820595,
+      "tag": "0007_fat_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787908548798,
+      "tag": "0008_master_import_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1787908670517,
+      "tag": "0009_master_failed_import_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787908764923,
+      "tag": "0010_master_history_traceability",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787908905186,
+      "tag": "0011_master_matching_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787909416481,
+      "tag": "0012_master_source_reservations_affiliates",
+      "breakpoints": true
     }
   ]
 }

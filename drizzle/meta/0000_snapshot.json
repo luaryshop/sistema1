@@ -1272,8 +1272,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "listing_import_staging_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "listing_import_staging_marketplace_connection_id_marketplace_connections_id_fk",
+        "staging_mkt_conn_fk": {
+          "name": "staging_mkt_conn_fk",
           "tableFrom": "listing_import_staging",
           "tableTo": "marketplace_connections",
           "columnsFrom": [
@@ -3465,8 +3465,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "sync_jobs_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "sync_jobs_marketplace_connection_id_marketplace_connections_id_fk",
+        "sync_jobs_mkt_conn_fk": {
+          "name": "sync_jobs_mkt_conn_fk",
           "tableFrom": "sync_jobs",
           "tableTo": "marketplace_connections",
           "columnsFrom": [
@@ -3868,8 +3868,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "webhook_events_marketplace_connection_id_marketplace_connections_id_fk": {
-          "name": "webhook_events_marketplace_connection_id_marketplace_connections_id_fk",
+        "webhook_mkt_conn_fk": {
+          "name": "webhook_mkt_conn_fk",
           "tableFrom": "webhook_events",
           "tableTo": "marketplace_connections",
           "columnsFrom": [
