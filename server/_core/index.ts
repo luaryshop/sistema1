@@ -8,8 +8,13 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { WebhookService } from "../services/webhookService";
 import { PublicStoreService } from "../services/publicStoreService";
+import { runDatabaseMigrations } from "../dbMigrations";
 
 async function startServer() {
+  if (process.env.NODE_ENV === "production") {
+    await runDatabaseMigrations();
+  }
+
   const app = express();
   const server = createServer(app);
   app.use(express.json({ limit: "50mb" }));
