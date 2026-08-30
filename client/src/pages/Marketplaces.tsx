@@ -15,29 +15,18 @@ export default function Marketplaces() {
   const { data: supportedMarketplaces } = trpc.marketplace.getSupportedMarketplaces.useQuery();
 
   // Mutations
-  const handleOAuthMutation = trpc.marketplace.handleOAuthCallback.useMutation();
+  const authorizationUrlMutation = trpc.marketplace.getAuthorizationUrl.useMutation();
   const disconnectMutation = trpc.marketplace.disconnect.useMutation();
 
   const handleConnect = async (marketplaceType: string) => {
     try {
       setConnecting(marketplaceType);
-
-      // Get authorization URL via fetch
-      const response = await fetch("/api/trpc/marketplace.getAuthorizationUrl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: { marketplaceType } }),
+      const { authUrl } = await authorizationUrlMutation.mutateAsync({
+        marketplaceType: marketplaceType as "mercadolivre" | "shopee" | "amazon" | "tiktok",
       });
-
-      const data = await response.json();
-      if (data.result?.data?.authUrl) {
-        // Redirect to marketplace OAuth
-        window.location.href = data.result.data.authUrl;
-      } else {
-        toast.error(data.error?.message || "Failed to get authorization URL");
-      }
+      window.location.assign(authUrl);
     } catch (error) {
-      toast.error(`Failed to connect to ${marketplaceType}`);
+      toast.error(error instanceof Error ? error.message : `Falha ao conectar ${marketplaceType}`);
     } finally {
       setConnecting(null);
     }

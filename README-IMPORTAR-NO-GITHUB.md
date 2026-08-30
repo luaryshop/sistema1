@@ -1,21 +1,41 @@
-# Correção do login local no Railway
+# Atualização v3 — conexão Mercado Livre
 
-Use este pacote para atualizar o repositório `luaryshop/sistema1` na branch `main`.
+Esta pasta contém os arquivos necessários para corrigir o botão **Conectar** do Luary no Railway. A versão usa o cliente tRPC tipado, valida as credenciais do marketplace e mostra uma mensagem clara quando alguma variável estiver ausente.
 
-## Arquivos
+## Arquivos incluídos
 
-- `server/_core/sdk.ts`: remove o fallback de sessões locais para o OAuth da Manus.
-- `client/src/main.tsx`: remove o redirecionamento automático do cliente para o portal OAuth da Manus.
-- `server/auth.local.test.ts`: adiciona testes para login local, sessão persistida e ausência de chamada OAuth.
-- `server/dbMigrations.ts`: aplica as migrations Drizzle no startup de produção.
-- `server/dbMigrations.test.ts`: testa o bootstrap de migrations.
-- `server/_core/index.ts`: executa o bootstrap antes de aceitar tráfego.
-- `Dockerfile`: copia `drizzle/` para a imagem final, onde o bootstrap lê as migrations.
+- `client/src/pages/Marketplaces.tsx`
+- `server/routers/marketplace.ts`
+- `server/services/marketplaceOAuthConfig.ts`
+- `server/marketplaceOAuthConfig.test.ts`
+- `server/marketplace.authorization.test.ts`
+- `server/_core/sdk.ts`
+- `client/src/main.tsx`
+- `server/auth.local.test.ts`
+- `server/dbMigrations.ts`
+- `server/dbMigrations.test.ts`
+- `server/_core/index.ts`
+- `Dockerfile`
 
-## Upload
+## Importação
 
-No GitHub, abra o repositório `luaryshop/sistema1`, selecione a branch `main`, use **Add file → Upload files**, arraste os seis arquivos preservando os caminhos das pastas e confirme o commit. Não apague o repositório inteiro.
+No repositório `luaryshop/sistema1`, branch `main`, substitua cada arquivo mantendo exatamente o caminho indicado. Não apague o repositório e não envie arquivos `.env`.
 
-Depois do commit, aguarde o Railway criar um novo deployment. Confirme o status **Successful** e teste o domínio público. Mantenha `MARKETPLACE_MODE=READ_ONLY`.
+Faça um commit, por exemplo: `Fix Mercado Livre OAuth authorization flow`. O Railway deve iniciar um novo deployment automaticamente.
 
-Não remova as implementações OAuth dos adaptadores Mercado Livre, Shopee, Amazon ou TikTok; elas pertencem à autenticação dos marketplaces e serão usadas na homologação externa. Nunca inclua senhas, tokens ou a URL completa do MySQL no GitHub.
+## Variáveis do Railway
+
+No serviço `sistema1` em `production`, confirme as variáveis abaixo:
+
+```text
+MERCADOLIVRE_CLIENT_ID=<Client ID da aplicação Mercado Livre>
+MERCADOLIVRE_CLIENT_SECRET=<Client Secret da aplicação Mercado Livre>
+MARKETPLACE_REDIRECT_URI=https://sistema1-production.up.railway.app/marketplaces
+MARKETPLACE_MODE=READ_ONLY
+```
+
+Os dois primeiros valores devem ser inseridos diretamente no Railway e nunca commitados no GitHub. A URL de retorno deve coincidir exatamente com a configurada na aplicação do Mercado Livre.
+
+## Teste
+
+Depois que o deployment estiver `Successful`, abra `/marketplaces`, faça login, clique em **Conectar** no Mercado Livre e confirme que a página oficial de autorização é aberta. Não autorize alterações fora da finalidade da homologação e não publique anúncios.

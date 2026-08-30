@@ -9,6 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { ListingImportService } from "../services/listingImportService";
 import { MatchingService } from "../services/matchingService";
 import { canLinkMatch } from "../services/matchingPolicy";
+import { getMarketplaceOAuthConfig } from "../services/marketplaceOAuthConfig";
 
 // Guarda o "state" gerado em getAuthorizationUrl para validar no callback
 // (proteção CSRF do fluxo OAuth). Em memória: suficiente para uma instância
@@ -61,7 +62,7 @@ export const marketplaceRouter = router({
         marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
       })
     )
-    .query(({ input, ctx }) => {
+    .mutation(({ input, ctx }) => {
       try {
         if (!AdapterFactory.isSupported(input.marketplaceType)) {
           throw new Error(`Unsupported marketplace: ${input.marketplaceType}`);
@@ -76,11 +77,7 @@ export const marketplaceRouter = router({
         cleanupExpiredStates();
         pendingOAuthStates.set(state, { userId: ctx.user.id, createdAt: Date.now() });
 
-        const credentials = {
-          clientId: process.env[`${input.marketplaceType.toUpperCase()}_CLIENT_ID`] || "",
-          clientSecret: process.env[`${input.marketplaceType.toUpperCase()}_CLIENT_SECRET`] || "",
-          redirectUri: process.env.MARKETPLACE_REDIRECT_URI || "http://localhost:3000/api/marketplace/callback",
-        };
+        const credentials = getMarketplaceOAuthConfig(input.marketplaceType);
 
         const adapter = AdapterFactory.createAdapter(input.marketplaceType, credentials);
         const authUrl = adapter.getAuthorizationUrl(state);
@@ -121,11 +118,7 @@ export const marketplaceRouter = router({
         }
         pendingOAuthStates.delete(input.state); // uso único
 
-        const credentials = {
-          clientId: process.env[`${input.marketplaceType.toUpperCase()}_CLIENT_ID`] || "",
-          clientSecret: process.env[`${input.marketplaceType.toUpperCase()}_CLIENT_SECRET`] || "",
-          redirectUri: process.env.MARKETPLACE_REDIRECT_URI || "http://localhost:3000/api/marketplace/callback",
-        };
+        const credentials = getMarketplaceOAuthConfig(input.marketplaceType);
 
         const adapter = AdapterFactory.createAdapter(input.marketplaceType, credentials);
 
