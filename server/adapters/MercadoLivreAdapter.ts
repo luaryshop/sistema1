@@ -20,11 +20,12 @@ import {
  * Implements OAuth2 and API integration for Mercado Livre
  */
 export class MercadoLivreAdapter extends BaseMarketplaceAdapter implements IMarketplaceAdapter {
-  private readonly authUrl = "https://auth.mercadolibre.com.br";
-  private readonly apiUrl = "https://api.mercadolibre.com";
+  // CORREÇÃO: Alterado de .com.br para .com para o fluxo de autenticação OAuth global funcionar
+  private readonly authUrl = "https://mercadolibre.com";
+  private readonly apiUrl = "https://mercadolibre.com";
 
   constructor(credentials: MarketplaceCredentials) {
-    super(credentials, "https://api.mercadolibre.com");
+    super(credentials, "https://mercadolibre.com");
   }
 
   /**
@@ -300,6 +301,7 @@ export class MercadoLivreAdapter extends BaseMarketplaceAdapter implements IMark
    * Pause or activate a listing
    */
   async pauseListing(accessToken: string, payload: any): Promise<any> {
+
     try {
       assertMarketplaceWriteEnabled(payload.paused ? "pausa de anúncio" : "ativação de anúncio", "mercadolivre");
       this.setAuthHeader(accessToken);
