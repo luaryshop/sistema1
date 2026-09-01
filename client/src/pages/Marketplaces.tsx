@@ -188,6 +188,8 @@ function OAuthCallbackHandler({ onSuccess }: { onSuccess: () => void }) {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
+    const shopId = params.get("shop_id") ?? undefined;
+    const mainAccountId = params.get("main_account_id") ?? undefined;
     // O marketplace de origem vai embutido no próprio "state" (formato "tipo::token"),
     // já que os provedores só devolvem "code" e "state" no redirect.
     const marketplaceType = state?.includes("::") ? state.split("::")[0] : null;
@@ -199,6 +201,8 @@ function OAuthCallbackHandler({ onSuccess }: { onSuccess: () => void }) {
         {
           code,
           state,
+          shopId,
+          mainAccountId,
           marketplaceType: marketplaceType as any,
         },
         {

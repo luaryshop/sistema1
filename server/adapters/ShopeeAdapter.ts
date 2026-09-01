@@ -20,12 +20,15 @@ import {
  * Implements OAuth2 and API integration for Shopee
  */
 export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplaceAdapter {
-  private readonly authUrl = "https://partner.shopeemobile.com/api/v2/oauth/authorize";
-  private readonly tokenUrl = "https://partner.shopeemobile.com/api/v2/oauth/token";
-  private readonly apiUrl = "https://partner.shopeemobile.com/api/v2";
+  private readonly authUrl = "https://open.shopee.com.br/auth";
+  private readonly tokenUrl = "https://partner.shopeemobile.com/api/v2/auth/token/get";
+  private readonly apiUrl = "https://openplatform.shopee.com.br/api/v2";
 
   constructor(credentials: MarketplaceCredentials) {
-    super(credentials, "https://partner.shopeemobile.com/api/v2");
+    super(credentials, "https://openplatform.shopee.com.br/api/v2");
+    if (!credentials.partnerId || !credentials.partnerKey) {
+      throw new Error("Shopee exige SHOPEE_PARTNER_ID e SHOPEE_PARTNER_KEY");
+    }
   }
 
   /**
@@ -33,7 +36,8 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
    */
   getAuthorizationUrl(state: string): string {
     const params = new URLSearchParams({
-      client_id: this.credentials.clientId,
+      partner_id: this.credentials.partnerId!,
+      auth_type: "seller",
       redirect_uri: this.credentials.redirectUri,
       response_type: "code",
       state,
@@ -45,27 +49,32 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
   /**
    * Exchange authorization code for tokens
    */
-  async exchangeCodeForTokens(code: string): Promise<MarketplaceTokens> {
+  async exchangeCodeForTokens(code: string, accountId?: string): Promise<MarketplaceTokens> {
     try {
+      if (!accountId) throw new Error("Shopee não retornou shop_id ou main_account_id");
+      const partnerId = this.credentials.partnerId!;
+      const partnerKey = this.credentials.partnerKey!;
       const timestamp = Math.floor(Date.now() / 1000);
-      const signature = this.generateSignature(code, timestamp);
-
-      const response = await axios.post(this.tokenUrl, {
-        client_id: this.credentials.clientId,
-        client_secret: this.credentials.clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: this.credentials.redirectUri,
+      const path = "/api/v2/auth/token/get";
+      const sign = crypto.createHmac("sha256", partnerKey).update(`${partnerId}${path}${timestamp}`).digest("hex");
+      const shopId = Number(accountId);
+      if (!Number.isInteger(shopId) || shopId <= 0) throw new Error("Shopee retornou shop_id inválido");
+      const body = { code, partner_id: Number(partnerId), shop_id: shopId };
+      const response = await axios.post(this.tokenUrl, body, {
+        params: { partner_id: Number(partnerId), timestamp, sign },
+        headers: { "Content-Type": "application/json" },
       });
 
-      const expiresIn = response.data.expires_in || 28800; // 8 hours default
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
+      if (response.data?.error || !response.data?.access_token) {
+        throw new Error(response.data?.message || response.data?.error || "Shopee não retornou access_token");
+      }
+      const expiresIn = Number(response.data.expire_in || response.data.expires_in || 14400);
       return {
         accessToken: response.data.access_token,
         refreshToken: response.data.refresh_token,
         expiresIn,
-        expiresAt,
+        expiresAt: new Date(Date.now() + expiresIn * 1000),
+        externalAccountId: accountId,
       };
     } catch (error) {
       this.handleApiError(error, "Shopee.exchangeCodeForTokens");
@@ -75,23 +84,34 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
   /**
    * Refresh access token
    */
-  async refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens> {
+  async refreshAccessToken(refreshToken: string, accountId?: string): Promise<MarketplaceTokens> {
     try {
-      const response = await axios.post(this.tokenUrl, {
-        client_id: this.credentials.clientId,
-        client_secret: this.credentials.clientSecret,
+      if (!accountId) throw new Error("Shopee exige shop_id para renovar o token");
+      const shopId = Number(accountId);
+      if (!Number.isInteger(shopId) || shopId <= 0) throw new Error("Shopee recebeu shop_id inválido");
+      const partnerId = this.credentials.partnerId!;
+      const partnerKey = this.credentials.partnerKey!;
+      const timestamp = Math.floor(Date.now() / 1000);
+      const path = "/api/v2/auth/access_token/get";
+      const sign = crypto.createHmac("sha256", partnerKey).update(`${partnerId}${path}${timestamp}`).digest("hex");
+      const response = await axios.post("https://partner.shopeemobile.com/api/v2/auth/access_token/get", {
         refresh_token: refreshToken,
-        grant_type: "refresh_token",
+        shop_id: shopId,
+        partner_id: Number(partnerId),
+      }, {
+        params: { partner_id: Number(partnerId), timestamp, sign },
+        headers: { "Content-Type": "application/json" },
       });
-
-      const expiresIn = response.data.expires_in || 28800;
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
+      if (response.data?.error || !response.data?.access_token) {
+        throw new Error(response.data?.message || response.data?.error || "Shopee não renovou access_token");
+      }
+      const expiresIn = Number(response.data.expire_in || response.data.expires_in || 14400);
       return {
         accessToken: response.data.access_token,
         refreshToken: response.data.refresh_token,
         expiresIn,
-        expiresAt,
+        expiresAt: new Date(Date.now() + expiresIn * 1000),
+        externalAccountId: accountId,
       };
     } catch (error) {
       this.handleApiError(error, "Shopee.refreshAccessToken");
@@ -101,14 +121,14 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
   /**
    * Validate tokens and get seller info
    */
-  async validateAndGetSellerInfo(accessToken: string): Promise<{ sellerId: string; sellerName: string }> {
+  async validateAndGetSellerInfo(accessToken: string, accountId?: string): Promise<{ sellerId: string; sellerName: string }> {
     try {
-      this.setAuthHeader(accessToken);
-      const response = await this.httpClient.get("/shop/get_shop_info");
-
+      if (!accountId) throw new Error("Shopee exige shop_id para consultar a loja");
+      const response = await this.signedShopRequest("/shop/get_shop_info", accessToken, accountId);
+      const data = response.data?.response ?? response.data?.data ?? response.data;
       return {
-        sellerId: response.data.data.shop_id.toString(),
-        sellerName: response.data.data.shop_name,
+        sellerId: String(data.shop_id ?? accountId),
+        sellerName: String(data.shop_name ?? data.shop_name_en ?? `Shopee ${accountId}`),
       };
     } catch (error) {
       this.handleApiError(error, "Shopee.validateAndGetSellerInfo");
@@ -121,20 +141,17 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
   async listListings(accessToken: string, filters?: { status?: string; limit?: number }): Promise<ImportedListing[]> {
     try {
       this.setAuthHeader(accessToken);
-      const seller = await this.validateAndGetSellerInfo(accessToken);
+      const seller = await this.validateAndGetSellerInfo(accessToken, this.credentials.externalAccountId);
       const limit = Math.min(filters?.limit ?? 50, 100);
-      const list = await this.httpClient.get(`/product/get_item_list`, {
-        params: {
-          shop_id: Number(seller.sellerId),
-          offset: 0,
-          page_size: limit,
-          item_status: filters?.status && filters.status !== "all" ? [filters.status] : ["NORMAL", "BANNED", "UNLIST"],
-        },
+      const list = await this.signedShopRequest("/product/get_item_list", accessToken, seller.sellerId, {
+        offset: 0,
+        page_size: limit,
+        item_status: filters?.status && filters.status !== "all" ? [filters.status] : ["NORMAL", "BANNED", "UNLIST"],
       });
       const ids = (list.data?.response?.item ?? list.data?.data?.item_list ?? []).slice(0, limit).map((item: any) => Number(item.item_id));
       if (!ids.length) return [];
-      const details = await this.httpClient.get(`/product/get_item_base_info`, {
-        params: { shop_id: Number(seller.sellerId), item_id_list: ids },
+      const details = await this.signedShopRequest("/product/get_item_base_info", accessToken, seller.sellerId, {
+        item_id_list: ids,
       });
       const rows = details.data?.response?.item_list ?? details.data?.data?.item_list ?? [];
       return rows.map((data: any): ImportedListing => ({
@@ -331,9 +348,22 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
   /**
    * Helper: Generate signature for Shopee API
    */
-  private generateSignature(code: string, timestamp: number): string {
-    const message = `${this.credentials.clientId}${code}${timestamp}`;
-    return crypto.createHmac("sha256", this.credentials.clientSecret).update(message).digest("hex");
+  private async signedShopRequest(path: string, accessToken: string, shopId: string, params: Record<string, unknown> = {}) {
+    const partnerId = this.credentials.partnerId!;
+    const partnerKey = this.credentials.partnerKey!;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signBase = `${partnerId}${path}${timestamp}${accessToken}${shopId}`;
+    const sign = crypto.createHmac("sha256", partnerKey).update(signBase).digest("hex");
+    return this.httpClient.get(path, {
+      params: {
+        ...params,
+        partner_id: Number(partnerId),
+        timestamp,
+        access_token: accessToken,
+        shop_id: Number(shopId),
+        sign,
+      },
+    });
   }
 
   /**

@@ -100,6 +100,8 @@ export const marketplaceRouter = router({
         marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
         code: z.string(),
         state: z.string(),
+        shopId: z.string().optional(),
+        mainAccountId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -123,10 +125,15 @@ export const marketplaceRouter = router({
         const adapter = AdapterFactory.createAdapter(input.marketplaceType, credentials);
 
         // Exchange code for tokens
-        const tokens = await adapter.exchangeCodeForTokens(input.code);
+        const accountId = input.marketplaceType === "shopee" ? input.shopId : undefined;
+        if (input.marketplaceType === "shopee" && !accountId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: input.mainAccountId ? "A homologação inicial aceita uma loja Shopee individual; use shop_id em vez de main_account_id" : "A Shopee não retornou shop_id" });
+        }
+
+        const tokens = await adapter.exchangeCodeForTokens(input.code, accountId);
 
         // Get seller info
-        const sellerInfo = await adapter.validateAndGetSellerInfo(tokens.accessToken);
+        const sellerInfo = await adapter.validateAndGetSellerInfo(tokens.accessToken, accountId);
 
         // Save connection
         await MarketplaceService.upsertConnection(ctx.user.id, input.marketplaceType, {

@@ -115,7 +115,14 @@ export class MarketplaceService {
     const credentials: MarketplaceCredentials = {
       clientId: decrypted.clientId || "",
       clientSecret: decrypted.clientSecret || "",
-      redirectUri: process.env.MARKETPLACE_REDIRECT_URI || "http://localhost:3000/api/marketplace/callback",
+      redirectUri: process.env.MARKETPLACE_REDIRECT_URI || "http://localhost:3000/marketplaces",
+      ...(connection.marketplaceType === "shopee"
+        ? {
+            partnerId: decrypted.clientId || undefined,
+            partnerKey: decrypted.clientSecret || undefined,
+            externalAccountId: connection.sellerId || undefined,
+          }
+        : {}),
     };
 
     return AdapterFactory.createAdapter(connection.marketplaceType as SupportedMarketplace, credentials);
@@ -135,7 +142,7 @@ export class MarketplaceService {
 
       const adapter = await this.getAdapter(connection);
       const decrypted = this.decryptConnection(connection);
-      const newTokens = await adapter.refreshAccessToken(decrypted.refreshToken || "");
+      const newTokens = await adapter.refreshAccessToken(decrypted.refreshToken || "", connection.sellerId || undefined);
 
       // Update connection with new tokens
       await this.upsertConnection(connection.userId, connection.marketplaceType as SupportedMarketplace, {

@@ -7,6 +7,10 @@ export interface MarketplaceCredentials {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  /** Shopee Open Platform credentials; not required by other marketplaces. */
+  partnerId?: string;
+  partnerKey?: string;
+  externalAccountId?: string;
 }
 
 export interface MarketplaceTokens {
@@ -14,6 +18,8 @@ export interface MarketplaceTokens {
   refreshToken?: string;
   expiresIn?: number;
   expiresAt?: Date;
+  /** Marketplace account identifier returned by providers such as Shopee. */
+  externalAccountId?: string;
 }
 
 export interface PublishProductPayload {
@@ -132,17 +138,17 @@ export interface IMarketplaceAdapter {
   /**
    * Exchange authorization code for tokens
    */
-  exchangeCodeForTokens(code: string): Promise<MarketplaceTokens>;
+  exchangeCodeForTokens(code: string, accountId?: string): Promise<MarketplaceTokens>;
 
   /**
    * Refresh access token
    */
-  refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens>;
+  refreshAccessToken(refreshToken: string, accountId?: string): Promise<MarketplaceTokens>;
 
   /**
    * Validate tokens and get seller info
    */
-  validateAndGetSellerInfo(accessToken: string): Promise<{ sellerId: string; sellerName: string }>;
+  validateAndGetSellerInfo(accessToken: string, accountId?: string): Promise<{ sellerId: string; sellerName: string }>;
 
   /**
    * List existing listings for safe import/linking.

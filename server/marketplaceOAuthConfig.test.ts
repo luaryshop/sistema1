@@ -30,4 +30,29 @@ describe("marketplace OAuth configuration", () => {
       MARKETPLACE_REDIRECT_URI: "http://localhost:3000/marketplaces",
     })).toThrow("MARKETPLACE_REDIRECT_URI deve usar HTTPS em produção");
   });
+
+  it("requires Shopee partner credentials", () => {
+    const shopeeEnv = {
+      NODE_ENV: "production",
+      SHOPEE_CLIENT_ID: "app-id",
+      SHOPEE_CLIENT_SECRET: "app-secret",
+      MARKETPLACE_REDIRECT_URI: validEnv.MARKETPLACE_REDIRECT_URI,
+      SHOPEE_PARTNER_ID: "123456",
+      SHOPEE_PARTNER_KEY: "partner-key",
+    };
+
+    expect(getMarketplaceOAuthConfig("shopee", shopeeEnv)).toEqual({
+      clientId: "app-id",
+      clientSecret: "app-secret",
+      redirectUri: validEnv.MARKETPLACE_REDIRECT_URI,
+      partnerId: "123456",
+      partnerKey: "partner-key",
+    });
+    expect(() => getMarketplaceOAuthConfig("shopee", { ...shopeeEnv, SHOPEE_PARTNER_ID: "" })).toThrow(
+      "SHOPEE_PARTNER_ID não configurado no servidor",
+    );
+    expect(() => getMarketplaceOAuthConfig("shopee", { ...shopeeEnv, SHOPEE_PARTNER_KEY: "" })).toThrow(
+      "SHOPEE_PARTNER_KEY não configurado no servidor",
+    );
+  });
 });
