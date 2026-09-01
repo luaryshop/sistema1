@@ -46,7 +46,7 @@ describe("marketplace.getAuthorizationUrl", () => {
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.marketplace.getAuthorizationUrl({ marketplaceType: "mercadolivre" });
 
-    expect(result.authUrl).toMatch(/^https:\/\/auth\.mercadolibre\.com\.br\/authorization\?/);
+    expect(result.authUrl).toMatch(/^https:\/\/auth\.mercadolivre\.com\.br\/authorization\?/);
     expect(result.authUrl).toContain("client_id=client-id");
     expect(result.authUrl).toContain("redirect_uri=https%3A%2F%2Fsistema1-production.up.railway.app%2Fmarketplaces");
     expect(result.state).toMatch(/^mercadolivre::/);

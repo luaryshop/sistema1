@@ -20,12 +20,14 @@ import {
  * Implements OAuth2 and API integration for Mercado Livre
  */
 export class MercadoLivreAdapter extends BaseMarketplaceAdapter implements IMarketplaceAdapter {
-  // CORREÇÃO: Alterado de .com.br para .com para o fluxo de autenticação OAuth global funcionar
-  private readonly authUrl = "https://mercadolibre.com";
-  private readonly apiUrl = "https://mercadolibre.com";
+  // A tela de autorização (login) fica num subdomínio próprio por país.
+  // Já as chamadas de API (token, itens, pedidos...) são unificadas em api.mercadolibre.com,
+  // independente do país. Misturar os dois (ou usar o domínio "nu", sem subdomínio)
+  // faz a autorização cair numa página inexistente e quebra todas as chamadas de API.
+  private readonly authUrl = "https://auth.mercadolivre.com.br";
 
   constructor(credentials: MarketplaceCredentials) {
-    super(credentials, "https://mercadolibre.com");
+    super(credentials, "https://api.mercadolibre.com");
   }
 
   /**
@@ -47,7 +49,7 @@ export class MercadoLivreAdapter extends BaseMarketplaceAdapter implements IMark
    */
   async exchangeCodeForTokens(code: string): Promise<MarketplaceTokens> {
     try {
-      const response = await axios.post(`${this.authUrl}/oauth/token`, {
+      const response = await axios.post(`${this.baseUrl}/oauth/token`, {
         grant_type: "authorization_code",
         client_id: this.credentials.clientId,
         client_secret: this.credentials.clientSecret,
@@ -74,7 +76,7 @@ export class MercadoLivreAdapter extends BaseMarketplaceAdapter implements IMark
    */
   async refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens> {
     try {
-      const response = await axios.post(`${this.authUrl}/oauth/token`, {
+      const response = await axios.post(`${this.baseUrl}/oauth/token`, {
         grant_type: "refresh_token",
         client_id: this.credentials.clientId,
         client_secret: this.credentials.clientSecret,
