@@ -20,7 +20,10 @@ import {
  * Implements OAuth2 and API integration for Shopee
  */
 export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplaceAdapter {
-  private readonly authUrl = "https://open.shopee.com.br/auth";
+  // A URL de autorização real da Shopee fica em partner.shopeemobile.com (não em
+  // open.shopee.com.br) e, diferente da maioria das APIs OAuth, precisa vir
+  // ASSINADA (timestamp + HMAC-SHA256) mesmo nesse primeiro passo — a Shopee
+  // rejeita o link sem isso. Fonte: documentação oficial do Open Platform v2.
   private readonly tokenUrl = "https://partner.shopeemobile.com/api/v2/auth/token/get";
   private readonly apiUrl = "https://openplatform.shopee.com.br/api/v2";
 
@@ -33,17 +36,30 @@ export class ShopeeAdapter extends BaseMarketplaceAdapter implements IMarketplac
 
   /**
    * Get OAuth authorization URL
+   *
+   * A Shopee não devolve o parâmetro "state" no redirect de volta (ao contrário
+   * do padrão OAuth2 comum) — ela só ecoa de volta o "redirect" que você mandou,
+   * acrescentando "code" e "shop_id". Por isso embutimos o state DENTRO da
+   * própria URL de redirect, como query param, pra conseguir recuperá-lo depois.
    */
   getAuthorizationUrl(state: string): string {
+    const partnerId = this.credentials.partnerId!;
+    const partnerKey = this.credentials.partnerKey!;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+    const sign = crypto.createHmac("sha256", partnerKey).update(`${partnerId}${path}${timestamp}`).digest("hex");
+
+    const redirectUrl = new URL(this.credentials.redirectUri);
+    redirectUrl.searchParams.set("state", state);
+
     const params = new URLSearchParams({
-      partner_id: this.credentials.partnerId!,
-      auth_type: "seller",
-      redirect_uri: this.credentials.redirectUri,
-      response_type: "code",
-      state,
+      partner_id: partnerId,
+      redirect: redirectUrl.toString(),
+      timestamp: String(timestamp),
+      sign,
     });
 
-    return `${this.authUrl}?${params.toString()}`;
+    return `https://partner.shopeemobile.com${path}?${params.toString()}`;
   }
 
   /**

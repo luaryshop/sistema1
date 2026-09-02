@@ -11,15 +11,18 @@ const credentials = {
 };
 
 describe("Shopee Open Platform adapter", () => {
-  it("builds the Brazilian seller authorization URL with partner_id", () => {
+  it("builds the Brazilian seller authorization URL with a signed request", () => {
     const url = new URL(new ShopeeAdapter(credentials).getAuthorizationUrl("shopee::state"));
 
-    expect(url.origin + url.pathname).toBe("https://open.shopee.com.br/auth");
+    expect(url.origin + url.pathname).toBe("https://partner.shopeemobile.com/api/v2/shop/auth_partner");
     expect(url.searchParams.get("partner_id")).toBe("123456");
-    expect(url.searchParams.get("auth_type")).toBe("seller");
-    expect(url.searchParams.get("response_type")).toBe("code");
-    expect(url.searchParams.get("redirect_uri")).toBe(credentials.redirectUri);
-    expect(url.searchParams.get("state")).toBe("shopee::state");
+    expect(url.searchParams.get("timestamp")).toMatch(/^\d+$/);
+    expect(url.searchParams.get("sign")).toMatch(/^[a-f0-9]{64}$/);
+
+    // A Shopee não devolve "state" — ele vai embutido dentro do próprio "redirect"
+    const redirect = new URL(url.searchParams.get("redirect")!);
+    expect(redirect.origin + redirect.pathname).toBe("https://sistema1-production.up.railway.app/marketplaces");
+    expect(redirect.searchParams.get("state")).toBe("shopee::state");
   });
 
   it("rejects Shopee credentials without partner identity", () => {
