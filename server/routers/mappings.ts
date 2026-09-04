@@ -66,7 +66,7 @@ export const mappingsRouter = router({
   }),
   runPreflight: protectedProcedure.input(z.object({
     productId: z.number(),
-    marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+    marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
   })).mutation(async ({ ctx, input }) => {
     return runPublicationPreflight(ctx.user.id, input.productId, input.marketplaceType);
   }),

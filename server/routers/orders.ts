@@ -10,7 +10,7 @@ export const ordersRouter = router({
   importFromMarketplace: protectedProcedure
     .input(
       z.object({
-        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
         since: z.date().optional(),
       })
     )

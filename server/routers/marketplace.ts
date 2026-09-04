@@ -59,7 +59,7 @@ export const marketplaceRouter = router({
   getAuthorizationUrl: protectedProcedure
     .input(
       z.object({
-        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
       })
     )
     .mutation(({ input, ctx }) => {
@@ -97,7 +97,7 @@ export const marketplaceRouter = router({
   handleOAuthCallback: protectedProcedure
     .input(
       z.object({
-        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
         code: z.string(),
         state: z.string(),
         shopId: z.string().optional(),
@@ -165,7 +165,7 @@ export const marketplaceRouter = router({
    * Preview existing listings before linking them to the master catalog.
    */
   stageListings: protectedProcedure
-    .input(z.object({ marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]), status: z.string().max(30).default("all"), limit: z.number().int().min(1).max(200).default(100) }))
+    .input(z.object({ marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]), status: z.string().max(30).default("all"), limit: z.number().int().min(1).max(200).default(100) }))
     .mutation(async ({ ctx, input }) => {
       try { return await ListingImportService.stageListings(ctx.user.id, input.marketplaceType, input.status, input.limit); }
       catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? error.message : "Falha ao gravar staging" }); }
@@ -227,7 +227,7 @@ export const marketplaceRouter = router({
 
   previewListings: protectedProcedure
     .input(z.object({
-      marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+      marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
       status: z.string().max(30).default("all"),
       limit: z.number().int().min(1).max(100).default(50),
     }))
@@ -248,7 +248,7 @@ export const marketplaceRouter = router({
    */
   linkListing: protectedProcedure
     .input(z.object({
-      marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+      marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
       listingId: z.string().min(1).max(255),
       productId: z.number().int().positive(),
       title: z.string().max(500).optional(),
@@ -296,7 +296,7 @@ export const marketplaceRouter = router({
   disconnect: protectedProcedure
     .input(
       z.object({
-        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -326,6 +326,7 @@ export const marketplaceRouter = router({
         shopee: "Shopee",
         amazon: "Amazon",
         tiktok: "TikTok Shop",
+        magalu: "Magalu",
       }[type],
     }));
   }),

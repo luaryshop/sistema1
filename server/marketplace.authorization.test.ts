@@ -24,6 +24,8 @@ const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
   MERCADOLIVRE_CLIENT_ID: process.env.MERCADOLIVRE_CLIENT_ID,
   MERCADOLIVRE_CLIENT_SECRET: process.env.MERCADOLIVRE_CLIENT_SECRET,
+  MAGALU_CLIENT_ID: process.env.MAGALU_CLIENT_ID,
+  MAGALU_CLIENT_SECRET: process.env.MAGALU_CLIENT_SECRET,
   MARKETPLACE_REDIRECT_URI: process.env.MARKETPLACE_REDIRECT_URI,
 };
 
@@ -31,6 +33,8 @@ beforeEach(() => {
   process.env.NODE_ENV = "production";
   process.env.MERCADOLIVRE_CLIENT_ID = "client-id";
   process.env.MERCADOLIVRE_CLIENT_SECRET = "client-secret";
+  process.env.MAGALU_CLIENT_ID = "magalu-client-id";
+  process.env.MAGALU_CLIENT_SECRET = "magalu-client-secret";
   process.env.MARKETPLACE_REDIRECT_URI = "https://sistema1-production.up.railway.app/marketplaces";
 });
 
@@ -38,6 +42,8 @@ afterEach(() => {
   process.env.NODE_ENV = originalEnv.NODE_ENV;
   process.env.MERCADOLIVRE_CLIENT_ID = originalEnv.MERCADOLIVRE_CLIENT_ID;
   process.env.MERCADOLIVRE_CLIENT_SECRET = originalEnv.MERCADOLIVRE_CLIENT_SECRET;
+  process.env.MAGALU_CLIENT_ID = originalEnv.MAGALU_CLIENT_ID;
+  process.env.MAGALU_CLIENT_SECRET = originalEnv.MAGALU_CLIENT_SECRET;
   process.env.MARKETPLACE_REDIRECT_URI = originalEnv.MARKETPLACE_REDIRECT_URI;
 });
 
@@ -50,6 +56,17 @@ describe("marketplace.getAuthorizationUrl", () => {
     expect(result.authUrl).toContain("client_id=client-id");
     expect(result.authUrl).toContain("redirect_uri=https%3A%2F%2Fsistema1-production.up.railway.app%2Fmarketplaces");
     expect(result.state).toMatch(/^mercadolivre::/);
+  });
+
+  it("returns an authorization URL and CSRF state for Magalu", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.marketplace.getAuthorizationUrl({ marketplaceType: "magalu" });
+
+    expect(result.authUrl).toMatch(/^https:\/\/id\.magalu\.com\/login\?/);
+    expect(result.authUrl).toContain("client_id=magalu-client-id");
+    expect(result.authUrl).toContain("redirect_uri=https%3A%2F%2Fsistema1-production.up.railway.app%2Fmarketplaces");
+    expect(result.authUrl).toContain("scope=");
+    expect(result.state).toMatch(/^magalu::/);
   });
 
   it("returns an actionable error when the client secret is missing", async () => {

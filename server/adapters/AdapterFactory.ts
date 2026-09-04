@@ -3,6 +3,7 @@ import { MercadoLivreAdapter } from "./MercadoLivreAdapter";
 import { ShopeeAdapter } from "./ShopeeAdapter";
 import { AmazonAdapter } from "./AmazonAdapter";
 import { TikTokAdapter } from "./TikTokAdapter";
+import { MagaluAdapter } from "./MagaluAdapter";
 
 /**
  * Adapter Factory
@@ -10,7 +11,7 @@ import { TikTokAdapter } from "./TikTokAdapter";
  * Extensible design allows adding new marketplaces without modifying existing code
  */
 
-export type SupportedMarketplace = "mercadolivre" | "shopee" | "amazon" | "tiktok";
+export type SupportedMarketplace = "mercadolivre" | "shopee" | "amazon" | "tiktok" | "magalu";
 
 export class AdapterFactory {
   private static adapters: Map<SupportedMarketplace, new (creds: MarketplaceCredentials) => IMarketplaceAdapter> =
@@ -19,6 +20,7 @@ export class AdapterFactory {
       ["shopee", ShopeeAdapter],
       ["amazon", AmazonAdapter],
       ["tiktok", TikTokAdapter],
+      ["magalu", MagaluAdapter],
     ]);
 
   /**

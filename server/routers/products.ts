@@ -41,7 +41,7 @@ export const productsRouter = router({
     .input(
       z.object({
         productId: z.number(),
-        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]),
+        marketplaceType: z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]),
       })
     )
     .mutation(async ({ ctx, input }) => {

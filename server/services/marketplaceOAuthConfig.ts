@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const supportedMarketplaceSchema = z.enum(["mercadolivre", "shopee", "amazon", "tiktok"]);
+const supportedMarketplaceSchema = z.enum(["mercadolivre", "shopee", "amazon", "tiktok", "magalu"]);
 
 export type MarketplaceOAuthConfig = {
   clientId: string;
