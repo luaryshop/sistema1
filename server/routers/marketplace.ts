@@ -111,14 +111,30 @@ export const marketplaceRouter = router({
         }
 
         // Valida o "state" (proteção CSRF) antes de prosseguir
-        const pending = pendingOAuthStates.get(input.state);
+        // O TikTok Shop não devolve o state real (o link de retorno é fixo,
+        // configurado uma vez no Partner Center). Pra esse marketplace,
+        // localizamos qualquer state pendente e ainda válido do PRÓPRIO usuário
+        // autenticado. Continua protegido por: (1) precisa estar logado e
+        // (2) o state tem que ter sido gerado por esse usuário há no máximo 10 min.
+        let pending = pendingOAuthStates.get(input.state);
+        let stateKeyToDelete = input.state;
+
+        if (!pending && input.marketplaceType === "tiktok") {
+          pendingOAuthStates.forEach((value, key) => {
+            if (!pending && key.startsWith("tiktok::") && value.userId === ctx.user.id) {
+              pending = value;
+              stateKeyToDelete = key;
+            }
+          });
+        }
+
         if (!pending || pending.userId !== ctx.user.id) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: "State inválido ou expirado. Tente conectar novamente.",
           });
         }
-        pendingOAuthStates.delete(input.state); // uso único
+        pendingOAuthStates.delete(stateKeyToDelete); // uso único
 
         const credentials = getMarketplaceOAuthConfig(input.marketplaceType);
 

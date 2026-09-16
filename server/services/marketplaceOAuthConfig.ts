@@ -8,6 +8,7 @@ export type MarketplaceOAuthConfig = {
   redirectUri: string;
   partnerId?: string;
   partnerKey?: string;
+  serviceId?: string;
 };
 
 export function getMarketplaceOAuthConfig(
@@ -33,6 +34,12 @@ export function getMarketplaceOAuthConfig(
     if (!clientId) throw new Error(`${prefix}_CLIENT_ID não configurado no servidor`);
     if (!clientSecret) throw new Error(`${prefix}_CLIENT_SECRET não configurado no servidor`);
   }
+
+  const serviceId = parsedType.data === "tiktok" ? env.TIKTOK_SERVICE_ID?.trim() ?? "" : undefined;
+  if (parsedType.data === "tiktok" && !serviceId) {
+    throw new Error("TIKTOK_SERVICE_ID não configurado no servidor");
+  }
+
   if (!redirectUri) {
     throw new Error("MARKETPLACE_REDIRECT_URI não configurada no servidor");
   }
@@ -54,5 +61,6 @@ export function getMarketplaceOAuthConfig(
     redirectUri,
     partnerId,
     partnerKey,
+    serviceId,
   };
 }

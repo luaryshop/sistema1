@@ -10,6 +10,8 @@ export interface MarketplaceCredentials {
   /** Shopee Open Platform credentials; not required by other marketplaces. */
   partnerId?: string;
   partnerKey?: string;
+  /** TikTok Shop exige um terceiro identificador além de App Key/App Secret. */
+  serviceId?: string;
   externalAccountId?: string;
 }
 

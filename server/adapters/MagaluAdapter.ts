@@ -21,21 +21,15 @@ import {
  *
  * Baseado na documentação oficial: https://developers.magalu.com
  *
- * Domínios (confirmados na doc oficial):
  *  - Login/token: id.magalu.com (GET /login, POST /oauth/token)
  *  - API de produtos/pedidos: api.magalu.com
  *
- * Os endpoints de catálogo (SKUs) e os escopos abaixo foram confirmados
- * direto na documentação oficial. Os endpoints de preço/estoque/pedidos
- * seguem o mesmo padrão REST usado pelos SKUs, mas ainda não foram testados
- * contra uma conta sandbox real — vale validar antes de usar em produção.
+ * Os escopos precisam ser os MESMOS configurados na criação do client em
+ * id.magalu.com, senão a Magalu recusa o login com erro de "invalid_scope".
  */
 export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplaceAdapter {
   private readonly idUrl = "https://id.magalu.com";
 
-  // Escopos necessários pra ler/escrever produtos, preços, estoque e pedidos.
-  // Precisam ser os MESMOS escopos configurados na criação do client em id.magalu.com,
-  // senão a Magalu recusa o login com erro de "invalid_scope".
   private readonly scopes = [
     "open:portfolio-skus-seller:read",
     "open:portfolio-skus-seller:write",
@@ -53,9 +47,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     super(credentials, "https://api.magalu.com");
   }
 
-  /**
-   * Get OAuth authorization URL
-   */
   getAuthorizationUrl(state: string): string {
     const params = new URLSearchParams({
       client_id: this.credentials.clientId,
@@ -69,9 +60,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     return `${this.idUrl}/login?${params.toString()}`;
   }
 
-  /**
-   * Exchange authorization code for tokens
-   */
   async exchangeCodeForTokens(code: string): Promise<MarketplaceTokens> {
     try {
       const response = await axios.post(
@@ -87,22 +75,18 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
       );
 
       const expiresIn = response.data.expires_in || 21600;
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
       return {
         accessToken: response.data.access_token,
         refreshToken: response.data.refresh_token,
         expiresIn,
-        expiresAt,
+        expiresAt: new Date(Date.now() + expiresIn * 1000),
       };
     } catch (error) {
       this.handleApiError(error, "Magalu.exchangeCodeForTokens");
     }
   }
 
-  /**
-   * Refresh access token
-   */
   async refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens> {
     try {
       const response = await axios.post(
@@ -117,22 +101,18 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
       );
 
       const expiresIn = response.data.expires_in || 21600;
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
       return {
         accessToken: response.data.access_token,
         refreshToken: response.data.refresh_token,
         expiresIn,
-        expiresAt,
+        expiresAt: new Date(Date.now() + expiresIn * 1000),
       };
     } catch (error) {
       this.handleApiError(error, "Magalu.refreshAccessToken");
     }
   }
 
-  /**
-   * Validate tokens and get seller info
-   */
   async validateAndGetSellerInfo(accessToken: string): Promise<{ sellerId: string; sellerName: string }> {
     try {
       this.setAuthHeader(accessToken);
@@ -147,9 +127,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * List existing seller SKUs for safe import/linking.
-   */
   async listListings(accessToken: string, filters?: { status?: string; limit?: number }): Promise<ImportedListing[]> {
     try {
       this.setAuthHeader(accessToken);
@@ -183,9 +160,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Publish a product (SKU) to Magalu
-   */
   async publishProduct(accessToken: string, payload: PublishProductPayload): Promise<PublishProductResponse> {
     try {
       this.setAuthHeader(accessToken);
@@ -206,7 +180,7 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
 
       return {
         listingId: String(response.data.id ?? response.data.sku_id ?? payload.sku),
-        listingUrl: response.data.url,
+        listingUrl: response.data.url ?? "",
         publishedAt: new Date(),
       };
     } catch (error) {
@@ -214,9 +188,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Update an existing SKU
-   */
   async updateProduct(accessToken: string, payload: UpdateProductPayload): Promise<SyncResult> {
     try {
       this.setAuthHeader(accessToken);
@@ -235,9 +206,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Update product price
-   */
   async updatePrice(accessToken: string, payload: UpdatePricePayload): Promise<SyncResult> {
     try {
       this.setAuthHeader(accessToken);
@@ -252,9 +220,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Update product stock
-   */
   async updateStock(accessToken: string, payload: UpdateStockPayload): Promise<SyncResult> {
     try {
       this.setAuthHeader(accessToken);
@@ -269,9 +234,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Get orders from Magalu
-   */
   async getOrders(accessToken: string, filters?: { since?: Date; status?: string }): Promise<Order[]> {
     try {
       this.setAuthHeader(accessToken);
@@ -289,9 +251,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Get a specific order
-   */
   async getOrder(accessToken: string, orderId: string): Promise<Order> {
     try {
       this.setAuthHeader(accessToken);
@@ -302,17 +261,11 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Verify webhook signature
-   */
   verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
     const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
     return hash === signature;
   }
 
-  /**
-   * Pause or activate a SKU
-   */
   async pauseListing(accessToken: string, payload: any): Promise<any> {
     try {
       assertMarketplaceWriteEnabled(payload.paused ? "pausa de anúncio" : "ativação de anúncio", "magalu");
@@ -332,9 +285,6 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Get listing status
-   */
   async getListingStatus(accessToken: string, listingId: string): Promise<any> {
     try {
       this.setAuthHeader(accessToken);
@@ -347,23 +297,17 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
     }
   }
 
-  /**
-   * Parse webhook payload
-   */
   parseWebhookPayload(payload: unknown): { type: string; data: unknown } | null {
     if (typeof payload !== "object" || payload === null) return null;
     const data = payload as Record<string, unknown>;
-    const eventType = (data.event_type ?? data.type) as string | undefined;
+    const eventType = String(data.event_type ?? data.type ?? "").toLowerCase();
 
-    if (eventType?.includes("order")) return { type: "order_update", data: payload };
-    if (eventType?.includes("sku") || eventType?.includes("product")) return { type: "item_update", data: payload };
+    if (eventType.includes("order")) return { type: "order_update", data: payload };
+    if (eventType.includes("sku") || eventType.includes("product")) return { type: "item_update", data: payload };
 
     return null;
   }
 
-  /**
-   * Helper: Parse Magalu order response
-   */
   private parseMagaluOrder(order: any): Order {
     const items = order.items ?? order.deliveries?.flatMap((d: any) => d.items) ?? [];
 
@@ -386,7 +330,7 @@ export class MagaluAdapter extends BaseMarketplaceAdapter implements IMarketplac
         ? {
             name: order.shipping_address.name,
             street: order.shipping_address.street,
-            number: order.shipping_address.number,
+            number: order.shipping_address.number ?? "",
             complement: order.shipping_address.complement,
             city: order.shipping_address.city,
             state: order.shipping_address.state,

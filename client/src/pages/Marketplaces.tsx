@@ -192,15 +192,25 @@ function OAuthCallbackHandler({ onSuccess }: { onSuccess: () => void }) {
     const mainAccountId = params.get("main_account_id") ?? undefined;
     // O marketplace de origem vai embutido no próprio "state" (formato "tipo::token"),
     // já que os provedores só devolvem "code" e "state" no redirect.
-    const marketplaceType = state?.includes("::") ? state.split("::")[0] : null;
+    //
+    // O TikTok Shop é exceção: o link de retorno é FIXO (cadastrado uma vez no
+    // Partner Center), então ele nunca devolve nosso "state". Pra reconhecer
+    // esse caso, cadastre lá o link já com "?mkt=tiktok" no final.
+    const mktMarker = params.get("mkt");
+    const marketplaceType = state?.includes("::")
+      ? state.split("::")[0]
+      : mktMarker === "tiktok"
+        ? "tiktok"
+        : null;
+    const effectiveState = state ?? (marketplaceType === "tiktok" ? "tiktok::sem-state" : null);
 
-    if (code && state && marketplaceType && !processed) {
+    if (code && effectiveState && marketplaceType && !processed) {
       setProcessed(true);
 
       handleCallbackMutation.mutate(
         {
           code,
-          state,
+          state: effectiveState,
           shopId,
           mainAccountId,
           marketplaceType: marketplaceType as any,
