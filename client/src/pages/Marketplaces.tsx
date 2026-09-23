@@ -57,8 +57,12 @@ export default function Marketplaces() {
 
   const authorizationUrlMutation = trpc.marketplace.getAuthorizationUrl.useMutation();
   const disconnectMutation = trpc.marketplace.disconnect.useMutation();
-  const previewListingsQuery = trpc.marketplace.previewListings.useQuery(
+  const previewMercadoLivreQuery = trpc.marketplace.previewListings.useQuery(
     { marketplaceType: "mercadolivre", status: "paused", limit: 100 },
+    { enabled: false },
+  );
+  const previewShopeeQuery = trpc.marketplace.previewListings.useQuery(
+    { marketplaceType: "shopee", status: "paused", limit: 100 },
     { enabled: false },
   );
   const stageListingsMutation = trpc.marketplace.stageListings.useMutation();
@@ -94,10 +98,11 @@ export default function Marketplaces() {
   const handlePreviewPausedListings = async (marketplaceType: string) => {
     try {
       setPreviewMarketplace(marketplaceType);
-      if (marketplaceType !== "mercadolivre") {
-        throw new Error("A consulta de anúncios está disponível para o Mercado Livre nesta etapa.");
+      if (marketplaceType !== "mercadolivre" && marketplaceType !== "shopee") {
+        throw new Error("A consulta de anúncios está disponível para Mercado Livre e Shopee nesta etapa.");
       }
-      const result = await previewListingsQuery.refetch();
+      const query = marketplaceType === "shopee" ? previewShopeeQuery : previewMercadoLivreQuery;
+      const result = await query.refetch();
       const listings = result.data ?? [];
       setPreviewListings(listings as ListingPreview[]);
       toast.success(`${listings.length} anúncio(s) pausado(s) encontrado(s).`);
@@ -163,9 +168,9 @@ export default function Marketplaces() {
         {supportedMarketplaces?.map((marketplace) => {
           const connection = connectionMap.get(marketplace.type);
           const isConnected = connection?.isConnected;
-          const isMercadoLivre = marketplace.type === "mercadolivre";
+          const isImportSupported = marketplace.type === "mercadolivre" || marketplace.type === "shopee";
           const isImporting = stageListingsMutation.isPending && previewMarketplace === marketplace.type;
-          const isPreviewing = previewListingsQuery.isFetching && previewMarketplace === marketplace.type;
+          const isPreviewing = (previewMercadoLivreQuery.isFetching || previewShopeeQuery.isFetching) && previewMarketplace === marketplace.type;
 
           return (
             <Card key={marketplace.type} className="relative overflow-hidden rounded-3xl border-slate-200/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -208,12 +213,12 @@ export default function Marketplaces() {
                   </div>
                 )}
 
-                {isConnected && isMercadoLivre && (
+                {isConnected && isImportSupported && (
                   <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">Importar anúncios pausados</p>
                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                        Consulte os anúncios do Mercado Livre e envie uma cópia para revisão e vinculação aos Produtos Mestres.
+                        Consulte os anúncios de {marketplace.name} e envie uma cópia para revisão e vinculação aos Produtos Mestres.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -257,13 +262,18 @@ export default function Marketplaces() {
         })}
       </div>
 
-      {previewMarketplace === "mercadolivre" && !previewListingsQuery.isFetching && previewListings.length > 0 && (
+      {(previewMarketplace === "mercadolivre" || previewMarketplace === "shopee") &&
+        !previewMercadoLivreQuery.isFetching &&
+        !previewShopeeQuery.isFetching &&
+        previewListings.length > 0 && (
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-600">Pré-visualização</p>
               <h2 className="mt-1 text-xl font-semibold text-slate-950">Anúncios pausados encontrados</h2>
-              <p className="mt-1 text-sm text-slate-500">{previewListings.length} anúncio(s) retornado(s) pelo Mercado Livre.</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {previewListings.length} anúncio(s) retornado(s) pelo {previewMarketplace === "shopee" ? "Shopee" : "Mercado Livre"}.
+              </p>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setPreviewMarketplace(null)} aria-label="Fechar pré-visualização">
               <X className="h-4 w-4" />
@@ -300,7 +310,7 @@ export default function Marketplaces() {
           </div>
           <div className="mt-4 flex items-start gap-2 rounded-2xl bg-emerald-50 p-3 text-xs leading-5 text-emerald-800">
             <Eye className="mt-0.5 h-4 w-4 shrink-0" />
-            Esta é apenas uma consulta. Os anúncios permanecem pausados e inalterados no Mercado Livre.
+            Esta é apenas uma consulta. Os anúncios permanecem pausados e inalterados no marketplace original.
           </div>
         </section>
       )}
