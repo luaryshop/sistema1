@@ -86,36 +86,44 @@ export type InsertSalesChannel = typeof salesChannels.$inferInsert;
 /**
  * Products in the ERP system
  */
-export const products = mysqlTable("products", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  sku: varchar("sku", { length: 100 }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  category: varchar("category", { length: 100 }),
-  subcategory: varchar("subcategory", { length: 100 }),
-  brand: varchar("brand", { length: 100 }),
-  color: varchar("color", { length: 100 }),
-  material: varchar("material", { length: 100 }),
-  description: text("description"),
-  costBase: int("cost_base").default(0), // in cents
-  basePrice: int("base_price").default(0), // sale price in cents; never derived directly from costBase
-  weightBase: int("weight_base").default(0), // in grams
-  height: int("height").default(0), // millimeters
-  width: int("width").default(0), // millimeters
-  length: int("length").default(0), // millimeters
-  ncm: varchar("ncm", { length: 20 }),
-  cest: varchar("cest", { length: 20 }),
-  origin: varchar("origin", { length: 30 }),
-  mpn: varchar("mpn", { length: 100 }),
-  marginTarget: int("margin_target").default(0), // percentage or fixed value in cents
-  marginType: varchar("margin_type", { length: 20 }).default("perc"), // 'perc' or 'fixed'
-  stock: int("stock").default(0),
-  minStock: int("min_stock").default(0),
-  photoUrl: varchar("photo_url", { length: 500 }),
-  status: varchar("status", { length: 50 }).default("active"), // 'active', 'inactive', 'archived'
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
+export const products = mysqlTable(
+  "products",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sku: varchar("sku", { length: 100 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    category: varchar("category", { length: 100 }),
+    subcategory: varchar("subcategory", { length: 100 }),
+    brand: varchar("brand", { length: 100 }),
+    color: varchar("color", { length: 100 }),
+    material: varchar("material", { length: 100 }),
+    description: text("description"),
+    costBase: int("cost_base").default(0), // in cents
+    basePrice: int("base_price").default(0), // sale price in cents; never derived directly from costBase
+    weightBase: int("weight_base").default(0), // in grams
+    height: int("height").default(0), // millimeters
+    width: int("width").default(0), // millimeters
+    length: int("length").default(0), // millimeters
+    ncm: varchar("ncm", { length: 20 }),
+    cest: varchar("cest", { length: 20 }),
+    origin: varchar("origin", { length: 30 }),
+    mpn: varchar("mpn", { length: 100 }),
+    marginTarget: int("margin_target").default(0), // percentage or fixed value in cents
+    marginType: varchar("margin_type", { length: 20 }).default("perc"), // 'perc' or 'fixed'
+    stock: int("stock").default(0),
+    minStock: int("min_stock").default(0),
+    photoUrl: varchar("photo_url", { length: 500 }),
+    status: varchar("status", { length: 50 }).default("active"), // 'active', 'inactive', 'archived'
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    // Evita SKU duplicado para o mesmo usuário — sem isso, dois produtos com
+    // o mesmo código confundem a sincronização de estoque/preço entre canais.
+    userSkuUnique: uniqueIndex("products_user_sku_unique").on(table.userId, table.sku),
+  })
+);
 
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = typeof products.$inferInsert;
