@@ -8,6 +8,7 @@ import { serveStatic, setupVite } from "./vite";
 import { WebhookService } from "../services/webhookService";
 import { PublicStoreService } from "../services/publicStoreService";
 import { runDatabaseMigrations } from "../dbMigrations";
+import type { SupportedMarketplace } from "../adapters/AdapterFactory";
 
 async function startServer() {
   if (process.env.NODE_ENV === "production") {
@@ -36,9 +37,10 @@ async function startServer() {
     return res.type("html").send(PublicStoreService.renderHtml(record));
   });
   app.post("/api/webhooks/:marketplace/:connectionId", async (req, res) => {
-    const marketplace = req.params.marketplace as "mercadolivre" | "shopee";
+    const marketplace = req.params.marketplace as SupportedMarketplace;
     const connectionId = Number(req.params.connectionId);
-    if (!["mercadolivre", "shopee"].includes(marketplace) || !Number.isInteger(connectionId) || connectionId <= 0) {
+    const marketplacesValidos: SupportedMarketplace[] = ["mercadolivre", "shopee", "amazon", "tiktok", "magalu"];
+    if (!marketplacesValidos.includes(marketplace) || !Number.isInteger(connectionId) || connectionId <= 0) {
       return res.status(400).json({ error: "Webhook inválido" });
     }
     try {
