@@ -69,8 +69,8 @@ export default function Omnichannel() {
   return (
     <div className="mx-auto max-w-[1500px] space-y-7">
       <header className="relative overflow-hidden rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70 md:p-8">
-        <div className="absolute right-[-30px] top-[-50px] h-40 w-40 rounded-full bg-blue-100/70 blur-3xl" />
-        <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-600"><Sparkles className="h-3.5 w-3.5" /> Command Center / Canais</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Catálogo, mídia e sincronização</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Prepare o produto mestre antes de publicar. Cada mudança fica registrada, deduplicada e pronta para a homologação dos canais.</p></div><div className="flex items-center gap-2 text-xs font-medium text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Núcleo interno protegido</div></div>
+        <div className="absolute right-[-30px] top-[-50px] h-40 w-40 rounded-full bg-accent/70 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-primary"><Sparkles className="h-3.5 w-3.5" /> Command Center / Canais</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Catálogo, mídia e sincronização</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Prepare o produto mestre antes de publicar. Cada mudança fica registrada, deduplicada e pronta para a homologação dos canais.</p></div><div className="flex items-center gap-2 text-xs font-medium text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Núcleo interno protegido</div></div>
       </header>
 
       <Card className="rounded-3xl border-slate-200/80 shadow-sm">
