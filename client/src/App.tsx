@@ -5,7 +5,6 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import Products from "./pages/Products";
 import Marketplaces from "./pages/Marketplaces";
 import Dashboard from "./pages/Dashboard";
 import Orders from "@/pages/Orders";
@@ -23,7 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/dashboard"><DashboardLayout><Dashboard /></DashboardLayout></Route>
-      <Route path="/produtos"><DashboardLayout><Products /></DashboardLayout></Route>
+      <Route path="/produtos"><DashboardLayout><Cadastros /></DashboardLayout></Route>
       <Route path="/pedidos"><DashboardLayout><Orders /></DashboardLayout></Route>
       <Route path="/marketplaces"><DashboardLayout><Marketplaces /></DashboardLayout></Route>
       <Route path="/cadastros"><DashboardLayout><Cadastros /></DashboardLayout></Route>

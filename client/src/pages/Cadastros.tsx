@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Edit3, Layers3, Package, Plus, Save, Trash2, Video, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +19,19 @@ type BanhoForm = { name: string; metal: string; color: string; milesimos: string
 type KitForm = { sku: string; name: string; description: string; costBase: string; stock: string };
 type FinanceForm = { description: string; type: "income" | "expense"; amount: string; date: string; category: string; notes: string };
 type LiveForm = { title: string; platform: string; scheduledAt: string; status: string; link: string; notes: string };
+
+type ProductForm = {
+  sku: string; name: string; category: string; brand: string; description: string;
+  costBase: string; basePrice: string; stock: string; minStock: string;
+  weightBase: string; height: string; width: string; length: string;
+  ncm: string; cest: string; origin: string; mpn: string;
+};
+const emptyProduct: ProductForm = {
+  sku: "", name: "", category: "", brand: "", description: "",
+  costBase: "", basePrice: "", stock: "", minStock: "",
+  weightBase: "", height: "", width: "", length: "",
+  ncm: "", cest: "", origin: "", mpn: "",
+};
 
 const emptyInsumo: InsumoForm = { name: "", internalCode: "", cost: "", weight: "", stock: "", minStock: "", idealStock: "" };
 const emptyBanho: BanhoForm = { name: "", metal: "", color: "", milesimos: "", quotation: "", labor: "", pricePerGram: "" };
@@ -48,7 +62,13 @@ export default function Cadastros() {
   const [editingKitId, setEditingKitId] = useState<number | null>(null);
   const [editingFinanceId, setEditingFinanceId] = useState<number | null>(null);
   const [editingLiveId, setEditingLiveId] = useState<number | null>(null);
-  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", brand: "", description: "", costBase: "", stock: "", minStock: "" });
+  const [productForm, setProductForm] = useState<ProductForm>(emptyProduct);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [pricingProductId, setPricingProductId] = useState<number | null>(null);
+  const [pricingProductName, setPricingProductName] = useState("");
+  const [marginMode, setMarginMode] = useState<"percent" | "fixed">("percent");
+  const [marginPercent, setMarginPercent] = useState(30);
+  const [marginFixedReais, setMarginFixedReais] = useState(20);
   const [insumoForm, setInsumoForm] = useState<InsumoForm>(emptyInsumo);
   const [banhoForm, setBanhoForm] = useState<BanhoForm>(emptyBanho);
   const [kitForm, setKitForm] = useState<KitForm>(emptyKit);
@@ -70,6 +90,12 @@ export default function Cadastros() {
   const createProduct = trpc.products.create.useMutation();
   const updateProduct = trpc.products.update.useMutation();
   const removeProduct = trpc.products.remove.useMutation();
+  const publishMutation = trpc.products.publishToAllMarketplaces.useMutation();
+  const marginValueBpOrCents = marginMode === "percent" ? Math.round(marginPercent * 100) : Math.round(marginFixedReais * 100);
+  const pricingQuery = trpc.pricing.calculate.useQuery(
+    { productId: pricingProductId ?? undefined, marginMode, marginValue: marginValueBpOrCents, roundPsychological: true },
+    { enabled: isPricingOpen && pricingProductId !== null }
+  );
   const createInsumo = trpc.catalog.insumos.create.useMutation();
   const updateInsumo = trpc.catalog.insumos.update.useMutation();
   const removeInsumo = trpc.catalog.insumos.remove.useMutation();
@@ -105,13 +131,40 @@ export default function Cadastros() {
   const handleProduct = async () => {
     if (!productForm.sku.trim() || !productForm.name.trim()) return toast.error("Informe SKU e nome do produto");
     try {
-      const payload = { sku: productForm.sku.trim(), name: productForm.name.trim(), category: productForm.category || undefined, brand: productForm.brand || undefined, description: productForm.description || undefined, costBase: moneyToCents(productForm.costBase), stock: toNumber(productForm.stock), minStock: toNumber(productForm.minStock) };
+      const payload = {
+        sku: productForm.sku.trim(), name: productForm.name.trim(),
+        category: productForm.category || undefined, brand: productForm.brand || undefined,
+        description: productForm.description || undefined,
+        costBase: moneyToCents(productForm.costBase), basePrice: moneyToCents(productForm.basePrice),
+        stock: toNumber(productForm.stock), minStock: toNumber(productForm.minStock),
+        weightBase: toNumber(productForm.weightBase), height: toNumber(productForm.height),
+        width: toNumber(productForm.width), length: toNumber(productForm.length),
+        ncm: productForm.ncm || undefined, cest: productForm.cest || undefined,
+        origin: productForm.origin || undefined, mpn: productForm.mpn || undefined,
+      };
       if (editingProductId) await updateProduct.mutateAsync({ id: editingProductId, ...payload }); else await createProduct.mutateAsync(payload);
-      setProductForm({ sku: "", name: "", category: "", brand: "", description: "", costBase: "", stock: "", minStock: "" }); setEditingProductId(null); refreshAll(); toast.success(editingProductId ? "Produto atualizado" : "Produto cadastrado");
+      setProductForm(emptyProduct); setEditingProductId(null); refreshAll(); toast.success(editingProductId ? "Produto atualizado" : "Produto cadastrado");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível salvar o produto"); }
   };
-  const editProduct = (item: NonNullable<typeof productsQuery.data>[number]) => { setEditingProductId(item.id); setProductForm({ sku: item.sku, name: item.name, category: item.category ?? "", brand: item.brand ?? "", description: item.description ?? "", costBase: ((item.costBase ?? 0) / 100).toFixed(2), stock: String(item.stock ?? 0), minStock: String(item.minStock ?? 0) }); };
+  const editProduct = (item: NonNullable<typeof productsQuery.data>[number]) => {
+    setEditingProductId(item.id);
+    setProductForm({
+      sku: item.sku, name: item.name, category: item.category ?? "", brand: item.brand ?? "",
+      description: item.description ?? "", costBase: ((item.costBase ?? 0) / 100).toFixed(2),
+      basePrice: ((item.basePrice ?? 0) / 100).toFixed(2), stock: String(item.stock ?? 0), minStock: String(item.minStock ?? 0),
+      weightBase: String(item.weightBase ?? 0), height: String(item.height ?? 0), width: String(item.width ?? 0), length: String(item.length ?? 0),
+      ncm: item.ncm ?? "", cest: item.cest ?? "", origin: item.origin ?? "", mpn: item.mpn ?? "",
+    });
+  };
   const deleteProduct = async (id: number) => { try { await removeProduct.mutateAsync({ id }); refreshAll(); toast.success("Produto removido"); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível remover o produto"); } };
+  const openPricing = (id: number, name: string) => { setPricingProductId(id); setPricingProductName(name); setIsPricingOpen(true); };
+  const handlePublish = async (productId: number) => {
+    try {
+      const result = await publishMutation.mutateAsync({ productId });
+      toast.success(`Publicado em ${result.successful.length} marketplace(s)`);
+      if (result.failed.length > 0) toast.error(`Falhou em ${result.failed.length} marketplace(s)`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível publicar o produto"); }
+  };
 
   const handleInsumo = async () => {
     if (!insumoForm.name.trim()) return toast.error("Informe o nome do insumo");
@@ -160,7 +213,123 @@ export default function Cadastros() {
     <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}><TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm"><TabsTrigger value="produtos">Produtos</TabsTrigger><TabsTrigger value="insumos">Insumos</TabsTrigger><TabsTrigger value="banhos">Banhos</TabsTrigger><TabsTrigger value="kits">Kits</TabsTrigger><TabsTrigger value="estoque">Estoque</TabsTrigger><TabsTrigger value="financeiro">Financeiro</TabsTrigger><TabsTrigger value="seo">SEO</TabsTrigger><TabsTrigger value="live">Live</TabsTrigger></TabsList>
       <div className="mt-4 max-w-xl"><Input placeholder="Filtrar o módulo atual por nome, código ou categoria" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
 
-      <TabsContent value="produtos" className="mt-5 space-y-5"><div className="grid gap-5 lg:grid-cols-[1fr_360px]"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Produtos cadastrados</CardTitle><CardDescription>Base central do catálogo e do estoque.</CardDescription></CardHeader><CardContent className="space-y-3">{filteredProducts.length === 0 ? <EmptyState icon={Package} title="Nenhum produto encontrado" description="Cadastre o primeiro produto ao lado." /> : filteredProducts.map((product) => <div key={product.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4"><div><div className="flex items-center gap-2"><p className="font-semibold">{product.name}</p><Badge variant="secondary">{product.status}</Badge></div><p className="text-sm text-slate-500">{product.sku} · {product.category || "Sem categoria"}</p></div><div className="flex items-center gap-4"><div className="text-right text-sm"><p><span className="text-slate-400">Custo </span><strong>{formatMoney(product.costBase)}</strong></p><p><span className="text-slate-400">Estoque </span><strong>{product.stock ?? 0}</strong></p></div><RowActions onEdit={() => editProduct(product)} onRemove={() => void deleteProduct(product.id)} /></div></div>)}</CardContent></Card><Card className="border-0 bg-[#152c2c] text-white shadow-sm"><CardHeader><CardTitle>{editingProductId ? "Editar produto" : "Novo produto"}</CardTitle><CardDescription className="text-slate-300">Cadastre a base antes de publicar.</CardDescription></CardHeader><CardContent className="space-y-3"><Field label="SKU"><Input className="bg-white/10 text-white" value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></Field><Field label="Nome"><Input className="bg-white/10 text-white" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Categoria"><Input className="bg-white/10 text-white" value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} /></Field><Field label="Marca"><Input className="bg-white/10 text-white" value={productForm.brand} onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })} /></Field></div><div className="grid grid-cols-3 gap-3"><Field label="Custo (R$)"><Input type="number" step="0.01" className="bg-white/10 text-white" value={productForm.costBase} onChange={(e) => setProductForm({ ...productForm, costBase: e.target.value })} /></Field><Field label="Estoque"><Input type="number" className="bg-white/10 text-white" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} /></Field><Field label="Mínimo"><Input type="number" className="bg-white/10 text-white" value={productForm.minStock} onChange={(e) => setProductForm({ ...productForm, minStock: e.target.value })} /></Field></div><Field label="Descrição"><Textarea className="bg-white/10 text-white" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></Field><div className="flex gap-2"><Button className="flex-1 bg-[#e5a27e] text-[#152c2c] hover:bg-[#f2b696]" onClick={handleProduct} disabled={createProduct.isPending || updateProduct.isPending}>{editingProductId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}{editingProductId ? "Atualizar produto" : "Cadastrar produto"}</Button>{editingProductId && <Button variant="outline" onClick={() => { setEditingProductId(null); setProductForm({ sku: "", name: "", category: "", brand: "", description: "", costBase: "", stock: "", minStock: "" }); }}>Cancelar</Button>}</div></CardContent></Card></div></TabsContent>
+      <TabsContent value="produtos" className="mt-5 space-y-5">
+        <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
+          <Card className="border-0 shadow-sm">
+            <CardHeader><CardTitle>Produtos cadastrados</CardTitle><CardDescription>Base central do catálogo e do estoque.</CardDescription></CardHeader>
+            <CardContent className="space-y-3">
+              {filteredProducts.length === 0 ? <EmptyState icon={Package} title="Nenhum produto encontrado" description="Cadastre o primeiro produto ao lado." /> : filteredProducts.map((product) => (
+                <div key={product.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2"><p className="font-semibold">{product.name}</p><Badge variant="secondary">{product.status}</Badge></div>
+                    <p className="text-sm text-slate-500">{product.sku} · {product.category || "Sem categoria"}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="text-right text-sm">
+                      <p><span className="text-slate-400">Custo </span><strong>{formatMoney(product.costBase)}</strong></p>
+                      <p><span className="text-slate-400">Venda </span><strong>{formatMoney(product.basePrice)}</strong></p>
+                      <p><span className="text-slate-400">Estoque </span><strong>{product.stock ?? 0}</strong></p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => openPricing(product.id, product.name)}>Precificar</Button>
+                    <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void handlePublish(product.id)} disabled={publishMutation.isPending}>Publicar</Button>
+                    <RowActions onEdit={() => editProduct(product)} onRemove={() => void deleteProduct(product.id)} />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 bg-[#152c2c] text-white shadow-sm">
+            <CardHeader><CardTitle>{editingProductId ? "Editar produto" : "Novo produto"}</CardTitle><CardDescription className="text-slate-300">Cadastre a base antes de publicar.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Identificação</p>
+              <Field label="SKU"><Input className="bg-white/10 text-white" value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></Field>
+              <Field label="Nome"><Input className="bg-white/10 text-white" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Categoria"><Input className="bg-white/10 text-white" value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} /></Field>
+                <Field label="Marca"><Input className="bg-white/10 text-white" value={productForm.brand} onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })} /></Field>
+              </div>
+              <Field label="Descrição"><Textarea className="bg-white/10 text-white" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></Field>
+
+              <p className="pt-2 text-[11px] font-bold uppercase tracking-wider text-white/50">Preço &amp; estoque</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Custo (R$)"><Input type="number" step="0.01" className="bg-white/10 text-white" value={productForm.costBase} onChange={(e) => setProductForm({ ...productForm, costBase: e.target.value })} /></Field>
+                <Field label="Preço de venda (R$)"><Input type="number" step="0.01" className="bg-white/10 text-white" value={productForm.basePrice} onChange={(e) => setProductForm({ ...productForm, basePrice: e.target.value })} /></Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Estoque"><Input type="number" className="bg-white/10 text-white" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} /></Field>
+                <Field label="Estoque mínimo"><Input type="number" className="bg-white/10 text-white" value={productForm.minStock} onChange={(e) => setProductForm({ ...productForm, minStock: e.target.value })} /></Field>
+              </div>
+
+              <p className="pt-2 text-[11px] font-bold uppercase tracking-wider text-white/50">Peso &amp; dimensões (para frete)</p>
+              <div className="grid grid-cols-4 gap-3">
+                <Field label="Peso (g)"><Input type="number" className="bg-white/10 text-white" value={productForm.weightBase} onChange={(e) => setProductForm({ ...productForm, weightBase: e.target.value })} /></Field>
+                <Field label="Altura (mm)"><Input type="number" className="bg-white/10 text-white" value={productForm.height} onChange={(e) => setProductForm({ ...productForm, height: e.target.value })} /></Field>
+                <Field label="Largura (mm)"><Input type="number" className="bg-white/10 text-white" value={productForm.width} onChange={(e) => setProductForm({ ...productForm, width: e.target.value })} /></Field>
+                <Field label="Comprimento (mm)"><Input type="number" className="bg-white/10 text-white" value={productForm.length} onChange={(e) => setProductForm({ ...productForm, length: e.target.value })} /></Field>
+              </div>
+
+              <p className="pt-2 text-[11px] font-bold uppercase tracking-wider text-white/50">Fiscal (obrigatório para marketplaces)</p>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="NCM"><Input className="bg-white/10 text-white" value={productForm.ncm} onChange={(e) => setProductForm({ ...productForm, ncm: e.target.value })} /></Field>
+                <Field label="CEST"><Input className="bg-white/10 text-white" value={productForm.cest} onChange={(e) => setProductForm({ ...productForm, cest: e.target.value })} /></Field>
+                <Field label="Origem"><Input className="bg-white/10 text-white" value={productForm.origin} onChange={(e) => setProductForm({ ...productForm, origin: e.target.value })} placeholder="Ex: 0 = nacional" /></Field>
+              </div>
+              <Field label="MPN / código do fabricante (opcional)"><Input className="bg-white/10 text-white" value={productForm.mpn} onChange={(e) => setProductForm({ ...productForm, mpn: e.target.value })} /></Field>
+
+              <div className="flex gap-2 pt-2">
+                <Button className="flex-1 bg-[#e5a27e] text-[#152c2c] hover:bg-[#f2b696]" onClick={handleProduct} disabled={createProduct.isPending || updateProduct.isPending}>
+                  {editingProductId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+                  {editingProductId ? "Atualizar produto" : "Cadastrar produto"}
+                </Button>
+                {editingProductId && <Button variant="outline" onClick={() => { setEditingProductId(null); setProductForm(emptyProduct); }}>Cancelar</Button>}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={isPricingOpen} onOpenChange={setIsPricingOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Sugestão de preço — {pricingProductName}</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Button size="sm" variant={marginMode === "percent" ? "default" : "outline"} onClick={() => setMarginMode("percent")}>% de lucro</Button>
+                <Button size="sm" variant={marginMode === "fixed" ? "default" : "outline"} onClick={() => setMarginMode("fixed")}>Valor fixo (R$)</Button>
+              </div>
+              {marginMode === "percent" ? (
+                <Field label="Margem de lucro desejada (%)"><Input type="number" value={marginPercent} onChange={(e) => setMarginPercent(Number(e.target.value))} /></Field>
+              ) : (
+                <Field label="Lucro fixo desejado (R$)"><Input type="number" step="0.01" value={marginFixedReais} onChange={(e) => setMarginFixedReais(Number(e.target.value))} /></Field>
+              )}
+              {pricingQuery.isLoading && <p className="text-sm text-slate-500">Calculando...</p>}
+              {pricingQuery.data && pricingQuery.data.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  Nenhum canal de venda ativo cadastrado ainda. Cadastre um canal em <strong>Precificação</strong> (com a comissão e taxa de cada marketplace) pra ver a sugestão aqui.
+                </p>
+              )}
+              {pricingQuery.data && pricingQuery.data.length > 0 && (
+                <div className="space-y-2">
+                  {pricingQuery.data.map((row) => (
+                    <div key={row.channelId} className="rounded-xl bg-slate-50 p-4 text-sm">
+                      <p className="mb-1 font-semibold">{row.channelName}</p>
+                      {row.impossivel || row.suggestedPriceCents == null ? (
+                        <p className="text-red-600">Não é possível atingir essa margem nesse canal (taxas + comissão consomem o preço todo).</p>
+                      ) : (
+                        <>
+                          <p className="flex justify-between"><span className="text-slate-500">Preço sugerido</span><strong className="text-lg">{formatMoney(row.suggestedPriceCents)}</strong></p>
+                          <p className="flex justify-between text-slate-500"><span>Lucro líquido estimado</span><span>{formatMoney(row.profitCents ?? 0)}</span></p>
+                          <p className="flex justify-between text-slate-500"><span>Margem sobre o preço</span><span>{((row.marginPercentOfPrice ?? 0) / 100).toFixed(1)}%</span></p>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {pricingQuery.error && <p className="text-sm text-red-600">{pricingQuery.error.message}</p>}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </TabsContent>
 
       <TabsContent value="insumos" className="mt-5"><div className="grid gap-5 lg:grid-cols-[1fr_360px]"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Insumos</CardTitle><CardDescription>Materiais, componentes e estoque mínimo.</CardDescription></CardHeader><CardContent className="space-y-3">{filteredInsumos.length === 0 ? <EmptyState icon={Package} title="Nenhum insumo encontrado" description="Use o formulário ao lado para começar." /> : filteredInsumos.map((item) => <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-100 p-4"><div><p className="font-semibold">{item.name}</p><p className="text-sm text-slate-500">{item.internalCode || "Sem código"} · {formatMoney(item.cost)}</p></div><div className="flex items-center gap-4"><div className="text-right text-sm"><p className={(item.stock ?? 0) <= (item.minStock ?? 0) ? "font-semibold text-amber-600" : "font-semibold text-slate-700"}>{item.stock ?? 0} un.</p><p className="text-slate-400">mín. {item.minStock ?? 0}</p></div><RowActions onEdit={() => editInsumo(item)} onRemove={() => void deleteInsumo(item.id)} /></div></div>)}</CardContent></Card><Card className="border-0 shadow-sm"><CardHeader><CardTitle>{editingInsumoId ? "Editar insumo" : "Novo insumo"}</CardTitle><CardDescription>Controle custo e disponibilidade.</CardDescription></CardHeader><CardContent className="space-y-3"><Field label="Nome"><Input value={insumoForm.name} onChange={(e) => setInsumoForm({ ...insumoForm, name: e.target.value })} /></Field><Field label="Código interno"><Input value={insumoForm.internalCode} onChange={(e) => setInsumoForm({ ...insumoForm, internalCode: e.target.value })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Custo (R$)"><Input type="number" step="0.01" value={insumoForm.cost} onChange={(e) => setInsumoForm({ ...insumoForm, cost: e.target.value })} /></Field><Field label="Peso (g)"><Input type="number" value={insumoForm.weight} onChange={(e) => setInsumoForm({ ...insumoForm, weight: e.target.value })} /></Field></div><div className="grid grid-cols-3 gap-3"><Field label="Estoque"><Input type="number" value={insumoForm.stock} onChange={(e) => setInsumoForm({ ...insumoForm, stock: e.target.value })} /></Field><Field label="Mínimo"><Input type="number" value={insumoForm.minStock} onChange={(e) => setInsumoForm({ ...insumoForm, minStock: e.target.value })} /></Field><Field label="Ideal"><Input type="number" value={insumoForm.idealStock} onChange={(e) => setInsumoForm({ ...insumoForm, idealStock: e.target.value })} /></Field></div><div className="flex gap-2"><Button className="flex-1" onClick={handleInsumo} disabled={createInsumo.isPending || updateInsumo.isPending}>{editingInsumoId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}{editingInsumoId ? "Atualizar insumo" : "Cadastrar insumo"}</Button>{editingInsumoId && <Button variant="outline" onClick={() => { setEditingInsumoId(null); setInsumoForm(emptyInsumo); }}>Cancelar</Button>}</div></CardContent></Card></div></TabsContent>
 
