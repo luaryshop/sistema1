@@ -7,6 +7,7 @@ import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { LoginRateLimiter } from "./services/loginRateLimiter";
 import { marketplaceRouter } from "./routers/marketplace";
 import { productsRouter } from "./routers/products";
 import { ordersRouter } from "./routers/orders";
@@ -35,6 +36,17 @@ export const appRouter = router({
     login: publicProcedure
       .input(z.object({ password: z.string().min(1, "Senha obrigatória") }))
       .mutation(async ({ input, ctx }) => {
+        // Chave por IP: bloqueia tentativas repetidas de adivinhar a senha
+        // antes mesmo de comparar — sem isso, um invasor podia tentar senhas
+        // sem limite nenhum, já que essa rota é pública por natureza (é a
+        // própria tela de login).
+        const ip = ctx.req.ip || ctx.req.socket?.remoteAddress || "desconhecido";
+        try {
+          LoginRateLimiter.checkAndConsume(`login:${ip}`);
+        } catch (error) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: error instanceof Error ? error.message : "Muitas tentativas." });
+        }
+
         if (!ENV.adminPassword) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -45,6 +57,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
         }
 
+        LoginRateLimiter.reset(`login:${ip}`);
         const openId = ENV.ownerOpenId;
         await db.upsertUser({
           openId,

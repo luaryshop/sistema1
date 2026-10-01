@@ -32,11 +32,18 @@ export class PublicStoreService {
     return JSON.stringify(base);
   }
 
+  // Impede que um nome/descrição de produto contendo "</script>" feche a tag
+  // <script> mais cedo e injete HTML/JS arbitrário na página pública (XSS
+  // armazenado via JSON-LD). JSON.stringify não escapa "<" por padrão.
+  static safeJsonLdForScriptTag(record: NonNullable<Awaited<ReturnType<typeof PublicStoreService.getBySlug>>>) {
+    return this.jsonLd(record).replace(/</g, "\\u003c");
+  }
+
   static renderHtml(record: NonNullable<Awaited<ReturnType<typeof PublicStoreService.getBySlug>>>) {
     const title = record.seo?.seoTitle || record.product.name;
     const description = record.seo?.metaDescription || record.product.description || "Confira detalhes deste produto.";
     const image = record.media.find((item) => item.isCover)?.url || record.product.photoUrl || "";
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${esc(`${ENV.publicStoreUrl.replace(/\/$/, "")}/produtos/${record.seo?.slug || slugify(record.product.name)}`)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}">${image ? `<meta property="og:image" content="${esc(image)}">` : ""}<script type="application/ld+json">${this.jsonLd(record)}</script></head><body><main><h1>${esc(record.product.name)}</h1><p>${esc(record.product.description || "")}</p>${image ? `<img src="${esc(image)}" alt="${esc(record.seo?.altText || record.product.name)}">` : ""}</main></body></html>`;
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${esc(`${ENV.publicStoreUrl.replace(/\/$/, "")}/produtos/${record.seo?.slug || slugify(record.product.name)}`)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}">${image ? `<meta property="og:image" content="${esc(image)}">` : ""}<script type="application/ld+json">${this.safeJsonLdForScriptTag(record)}</script></head><body><main><h1>${esc(record.product.name)}</h1><p>${esc(record.product.description || "")}</p>${image ? `<img src="${esc(image)}" alt="${esc(record.seo?.altText || record.product.name)}">` : ""}</main></body></html>`;
   }
 
   static async sitemap() {
