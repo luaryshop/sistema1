@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Edit3, Layers3, Package, Plus, Save, Trash2, Video, Warehouse } from "lucide-react";
 import { toast } from "sonner";
+import { CatalogImportDialog } from "@/components/CatalogImportDialog";
 
 type TabKey = "produtos" | "insumos" | "banhos" | "kits" | "estoque" | "financeiro" | "seo" | "live";
 type KitLine = { kind: "product" | "insumo"; referenceId: string; quantity: string };
@@ -216,7 +217,7 @@ export default function Cadastros() {
       <TabsContent value="produtos" className="mt-5 space-y-5">
         <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
           <Card className="border-0 shadow-sm">
-            <CardHeader><CardTitle>Produtos cadastrados</CardTitle><CardDescription>Base central do catálogo e do estoque.</CardDescription></CardHeader>
+            <CardHeader className="flex flex-row items-start justify-between gap-3"><div><CardTitle>Produtos cadastrados</CardTitle><CardDescription>Base central do catálogo e do estoque.</CardDescription></div><CatalogImportDialog onDone={refreshAll} /></CardHeader>
             <CardContent className="space-y-3">
               {filteredProducts.length === 0 ? <EmptyState icon={Package} title="Nenhum produto encontrado" description="Cadastre o primeiro produto ao lado." /> : filteredProducts.map((product) => (
                 <div key={product.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
