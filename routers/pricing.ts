@@ -187,7 +187,6 @@ export const pricingRouter = router({
         });
 
         if (suggestedPrice !== null && input.roundPsychological) {
-          // Arredonda pra cima até o próximo valor terminando em ,90 (ex: 4567 -> 4790... normalizado pra 4990? )
           const reais = Math.ceil(suggestedPrice / 100);
           suggestedPrice = reais * 100 - 10; // termina em ,90
           if (suggestedPrice < costCents) suggestedPrice = Math.ceil(costCents / 100) * 100 - 10;
@@ -218,8 +217,7 @@ export const pricingRouter = router({
     }),
 
   /**
-   * Dado um preço já definido, calcula a margem líquida real por canal
-   * (útil pra conferir preços já praticados, não só sugerir novos).
+   * Dado um preço já definido, calcula a margem líquida real por canal.
    */
   evaluate: protectedProcedure
     .input(
