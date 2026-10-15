@@ -1,6 +1,6 @@
 # Status do Projeto — o que está pronto e o que falta
 
-## ✅ Pronto e testado (build, typecheck e 12 testes automatizados passando)
+## ✅ Pronto e testado (build, typecheck e 89 testes automatizados passando na revisão de 2026-10-15)
 
 - **Cadastros internos do ERP** — Produtos, Insumos, Banhos, Kits, Financeiro: CRUD completo, validado, com isolamento por usuário e testes automatizados.
 - **Login independente** — senha própria, sem depender de nenhum serviço externo.

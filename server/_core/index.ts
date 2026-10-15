@@ -97,4 +97,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+  console.error("[Server] Falha fatal ao iniciar:", error);
+  process.exit(1);
+});

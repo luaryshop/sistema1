@@ -1,5 +1,7 @@
 # Deploy do Luary Shop ERP — 100% independente (sem Manus)
 
+> **ATENÇÃO — instruções antigas:** o roteiro abaixo foi escrito para uma implantação anterior e recomenda Railway. Não o use como configuração atual. Consulte primeiro [`DEPLOY_ATUAL.md`](./DEPLOY_ATUAL.md), que explica a execução local, separa teste gratuito de produção e lista os requisitos ainda pendentes. O `.gitignore` foi adicionado nesta revisão.
+
 Este projeto foi ajustado para rodar de forma totalmente independente da plataforma Manus:
 - O login agora usa senha própria (variável `ADMIN_PASSWORD`), não depende mais de `api.manus.im`.
 - Corrigido um bug de migration (nome de chave estrangeira maior que 64 caracteres, que travava a criação do banco em MySQL/MariaDB padrão).
