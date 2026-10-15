@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Share2, Calculator, Boxes, AlertTriangle, PackageCheck } from "lucide-react";
+import { Plus, Edit2, Trash2, Share2, Calculator, Boxes } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Products() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  
   const [formData, setFormData] = useState({
     sku: "",
     name: "",
@@ -20,7 +21,9 @@ export default function Products() {
     costBase: 0,
     stock: 0,
     minStock: 0,
+    imageUrl: "",
   });
+
   const [editFormData, setEditFormData] = useState({
     sku: "",
     name: "",
@@ -30,7 +33,10 @@ export default function Products() {
     costBase: 0,
     stock: 0,
     minStock: 0,
+    imageUrl: "",
   });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Queries
   const { data: products, isLoading, refetch } = trpc.products.list.useQuery();
@@ -60,13 +66,58 @@ export default function Products() {
   const removeMutation = trpc.products.remove.useMutation();
   const publishMutation = trpc.products.publishToAllMarketplaces.useMutation();
 
+  // Função para lidar com o upload de imagem (convertendo para Base64 e enviando ao servidor)
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 5MB.");
+      return;
+    }
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = (reader.result as string).split(",")[1];
+
+      try {
+        const response = await fetch("/api/upload-github", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileBase64: base64String,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.url) {
+          if (isEdit) {
+            setEditFormData((prev) => ({ ...prev, imageUrl: data.url }));
+          } else {
+            setFormData((prev) => ({ ...prev, imageUrl: data.url }));
+          }
+          toast.success("Imagem enviada e integrada com sucesso!");
+        } else {
+          toast.error("Erro ao enviar imagem.");
+        }
+      } catch (error) {
+        toast.error("Falha ao comunicar com o serviço de upload.");
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCreate = async () => {
     try {
       await createMutation.mutateAsync({
         ...formData,
         costBase: formData.costBase * 100, // Convert to cents
       });
-      toast.success("Product created successfully");
+      toast.success("Produto criado com sucesso");
       setFormData({
         sku: "",
         name: "",
@@ -76,11 +127,12 @@ export default function Products() {
         costBase: 0,
         stock: 0,
         minStock: 0,
+        imageUrl: "",
       });
       setIsCreateOpen(false);
       refetch();
     } catch (error) {
-      toast.error("Failed to create product");
+      toast.error("Falha ao criar produto");
     }
   };
 
@@ -95,6 +147,7 @@ export default function Products() {
       costBase: (product.costBase ?? 0) / 100,
       stock: product.stock ?? 0,
       minStock: product.minStock ?? 0,
+      imageUrl: (product as any).imageUrl ?? "",
     });
     setIsEditOpen(true);
   };
@@ -137,12 +190,12 @@ export default function Products() {
   const handlePublish = async (productId: number) => {
     try {
       const result = await publishMutation.mutateAsync({ productId });
-      toast.success(`Published to ${result.successful.length} marketplace(s)`);
+      toast.success(`Publicado com sucesso em ${result.successful.length} marketplace(s)`);
       if (result.failed.length > 0) {
-        toast.error(`Failed on ${result.failed.length} marketplace(s)`);
+        toast.error(`Falha em ${result.failed.length} marketplace(s)`);
       }
     } catch (error) {
-      toast.error("Failed to publish product");
+      toast.error("Falha ao publicar produto");
     }
   };
 
@@ -155,8 +208,35 @@ export default function Products() {
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-7">
-      <div className="relative overflow-hidden rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70 md:p-8"><div className="absolute right-[-30px] top-[-70px] h-48 w-48 rounded-full bg-violet-100/70 blur-3xl" /><div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end"><div><p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-violet-600"><Boxes className="h-3.5 w-3.5" /> Command Center / Catálogo</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Produtos</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Seu catálogo mestre é a fonte de verdade para anúncios, estoque, preço e conteúdo.</p></div><div className="flex items-center gap-2"><div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Unidades</p><p className="text-sm font-semibold text-slate-800">{totalStock.toLocaleString("pt-BR")}</p></div><div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Atenção</p><p className={`text-sm font-semibold ${lowStockCount ? "text-rose-600" : "text-emerald-600"}`}>{lowStockCount}</p></div></div></div></div>
-      <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium text-slate-500">{products?.length || 0} produto(s) no catálogo</p><p className="text-xs text-slate-400">Edite em um só lugar e prepare os canais depois.</p></div>
+      <div className="relative overflow-hidden rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70 md:p-8">
+        <div className="absolute right-[-30px] top-[-70px] h-48 w-48 rounded-full bg-violet-100/70 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div>
+            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-violet-600">
+              <Boxes className="h-3.5 w-3.5" /> Command Center / Catálogo
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Produtos</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Seu catálogo mestre com suporte a imagens universais para marketplaces.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Unidades</p>
+              <p className="text-sm font-semibold text-slate-800">{totalStock.toLocaleString("pt-BR")}</p>
+            </div>
+            <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Atenção</p>
+              <p className={`text-sm font-semibold ${lowStockCount ? "text-rose-600" : "text-emerald-600"}`}>{lowStockCount}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium text-slate-500">{products?.length || 0} produto(s) no catálogo</p>
+          <p className="text-xs text-slate-400">Gerencie estoque, custos e imagens em um só lugar.</p>
+        </div>
+
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="rounded-xl bg-slate-950 shadow-sm hover:bg-slate-800">
@@ -164,7 +244,7 @@ export default function Products() {
               Novo produto
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Novo Produto</DialogTitle>
             </DialogHeader>
@@ -194,23 +274,33 @@ export default function Products() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
+              
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500">Imagem do Produto (Padrão Marketplaces)</label>
+                <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
+                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem...</p>}
+                {formData.imageUrl && (
+                  <img src={formData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
+                )}
+              </div>
+
               <Input
                 type="number"
                 placeholder="Custo Base (R$)"
                 value={formData.costBase}
-                onChange={(e) => setFormData({ ...formData, costBase: parseFloat(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, costBase: parseFloat(e.target.value) || 0 })}
               />
               <Input
                 type="number"
                 placeholder="Estoque"
                 value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
               />
               <Input
                 type="number"
                 placeholder="Estoque Mínimo"
                 value={formData.minStock}
-                onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
               />
               <Button onClick={handleCreate} className="w-full">
                 Criar Produto
@@ -220,7 +310,7 @@ export default function Products() {
         </Dialog>
 
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Editar Produto</DialogTitle>
             </DialogHeader>
@@ -250,6 +340,16 @@ export default function Products() {
                 value={editFormData.description}
                 onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
               />
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500">Alterar Imagem do Produto</label>
+                <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, true)} />
+                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem...</p>}
+                {editFormData.imageUrl && (
+                  <img src={editFormData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
+                )}
+              </div>
+
               <Input
                 type="number"
                 placeholder="Custo Base (R$)"
@@ -277,8 +377,13 @@ export default function Products() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products?.map((product) => (
-          <Card key={product.id} className="rounded-3xl border-slate-200/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        {products?.map((product: any) => (
+          <Card key={product.id} className="rounded-3xl border-slate-200/85 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md overflow-hidden">
+            {product.imageUrl && (
+              <div className="h-40 w-full bg-slate-100 overflow-hidden flex items-center justify-center border-b">
+                <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+              </div>
+            )}
             <CardHeader>
               <CardTitle className="text-lg">{product.name}</CardTitle>
               <CardDescription>{product.sku}</CardDescription>
@@ -415,7 +520,7 @@ export default function Products() {
               )}
 
               <div className="space-y-3">
-                {pricingResults?.map((r) => (
+                {pricingResults?.map((r: any) => (
                   <div key={r.channelId} className="border rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-semibold">{r.channelName}</span>
