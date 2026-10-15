@@ -1,0 +1,116 @@
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import * as db from "./db";
+import { getSessionCookieOptions } from "./_core/cookies";
+import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
+import { systemRouter } from "./_core/systemRouter";
+import { publicProcedure, router } from "./_core/trpc";
+import { LoginRateLimiter } from "./services/loginRateLimiter";
+import { marketplaceRouter } from "./routers/marketplace";
+import { productsRouter } from "./routers/products";
+import { ordersRouter } from "./routers/orders";
+import { catalogRouter } from "./routers/catalog";
+import { pricingRouter } from "./routers/pricing";
+import { omnichannelRouter } from "./routers/omnichannel";
+import { seoAdvancedRouter } from "./routers/seoAdvanced";
+import { inventoryRouter } from "./routers/inventory";
+import { catalogEnhancementsRouter } from "./routers/catalogEnhancements";
+import { dataToolsRouter } from "./routers/dataTools";
+import { operationsRouter } from "./routers/operations";
+import { conflictsRouter } from "./routers/conflicts";
+import { identifiersRouter } from "./routers/identifiers";
+import { inventoryMovementsRouter } from "./routers/inventoryMovements";
+import { mappingsRouter } from "./routers/mappings";
+import { supplyRouter } from "./routers/supply";
+
+export const appRouter = router({
+    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  system: systemRouter,
+  auth: router({
+    me: publicProcedure.query(opts => opts.ctx.user),
+
+    // Login local por senha (substitui o OAuth da Manus). A senha vem da
+    // variável de ambiente ADMIN_PASSWORD — não fica no código-fonte.
+    login: publicProcedure
+      .input(z.object({ password: z.string().min(1, "Senha obrigatória") }))
+      .mutation(async ({ input, ctx }) => {
+        // Chave por IP: bloqueia tentativas repetidas de adivinhar a senha
+        // antes mesmo de comparar — sem isso, um invasor podia tentar senhas
+        // sem limite nenhum, já que essa rota é pública por natureza (é a
+        // própria tela de login).
+        const ip = ctx.req.ip || ctx.req.socket?.remoteAddress || "desconhecido";
+        try {
+          LoginRateLimiter.checkAndConsume(`login:${ip}`);
+        } catch (error) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: error instanceof Error ? error.message : "Muitas tentativas." });
+        }
+
+        if (!ENV.adminPassword) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "ADMIN_PASSWORD não configurada no servidor.",
+          });
+        }
+        if (input.password !== ENV.adminPassword) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+        }
+
+        LoginRateLimiter.reset(`login:${ip}`);
+        const openId = ENV.ownerOpenId;
+        await db.upsertUser({
+          openId,
+          name: ENV.ownerName,
+          email: null,
+          loginMethod: "password",
+          lastSignedIn: new Date(),
+          role: "admin",
+        });
+
+        const sessionToken = await sdk.createSessionToken(openId, {
+          name: ENV.ownerName,
+          expiresInMs: ONE_YEAR_MS,
+        });
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+        return { success: true } as const;
+      }),
+
+    logout: publicProcedure.mutation(({ ctx }) => {
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      return {
+        success: true,
+      } as const;
+    }),
+  }),
+
+  marketplace: marketplaceRouter,
+  products: productsRouter,
+  orders: ordersRouter,
+  catalog: catalogRouter,
+  pricing: pricingRouter,
+  omnichannel: omnichannelRouter,
+  seoAdvanced: seoAdvancedRouter,
+  inventory: inventoryRouter,
+  catalogEnhancements: catalogEnhancementsRouter,
+  dataTools: dataToolsRouter,
+  operations: operationsRouter,
+  conflicts: conflictsRouter,
+  identifiers: identifiersRouter,
+  inventoryMovements: inventoryMovementsRouter,
+  mappings: mappingsRouter,
+  supply: supplyRouter,
+
+  // TODO: add feature routers here, e.g.
+  // todo: router({
+  //   list: protectedProcedure.query(({ ctx }) =>
+  //     db.getUserTodos(ctx.user.id)
+  //   ),
+  // }),
+});
+
+export type AppRouter = typeof appRouter;
