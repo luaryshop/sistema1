@@ -115,12 +115,14 @@ beforeEach(() => {
 describe("products router", () => {
   it("creates, updates and removes a product for its owner", async () => {
     const caller = appRouter.createCaller(createAuthContext(1));
-    const created = await caller.products.create({ sku: "SKU-001", name: "Brinco", costBase: 1250, stock: 3, minStock: 1 });
+    const photoUrl = "https://raw.githubusercontent.com/luaryshop/sistema1/main/client/public/uploads/products/brinco.png";
+    const created = await caller.products.create({ sku: "SKU-001", name: "Brinco", costBase: 1250, stock: 3, minStock: 1, photoUrl });
     expect(created).toMatchObject({ id: 1, success: true });
     expect((await caller.products.list())).toHaveLength(1);
+    expect((await caller.products.get({ id: created.id })).photoUrl).toBe(photoUrl);
 
-    await caller.products.update({ id: created.id, name: "Brinco atualizado", stock: 4 });
-    expect((await caller.products.get({ id: created.id })).name).toBe("Brinco atualizado");
+    await caller.products.update({ id: created.id, name: "Brinco atualizado", stock: 4, photoUrl: null });
+    expect(await caller.products.get({ id: created.id })).toMatchObject({ name: "Brinco atualizado", photoUrl: null });
 
     await caller.products.remove({ id: created.id });
     expect(await caller.products.list()).toHaveLength(0);

@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { uploadImageToGitHub } from "../services/githubStorage";
+import { MAX_PRODUCT_IMAGE_BASE64_LENGTH, validateProductImageBase64 } from "../services/productImageValidation";
 
 const importRow = z.object({
   sku: z.string().trim().min(1).max(100),
@@ -15,7 +16,7 @@ const importRow = z.object({
   stock: z.number().int().min(0).default(0),
   costBase: z.number().int().min(0).default(0),
   minStock: z.number().int().min(0).default(0),
-  imageUrl: z.string().optional(),
+  photoUrl: z.string().trim().url().max(500).optional(),
 });
 
 export const dataToolsRouter = router({
@@ -72,13 +73,23 @@ export const dataToolsRouter = router({
   uploadGithubImage: protectedProcedure
     .input(
       z.object({
-        fileName: z.string(),
-        fileBase64: z.string(),
+        fileName: z.string().trim().min(1).max(255),
+        fileBase64: z.string().min(1).max(MAX_PRODUCT_IMAGE_BASE64_LENGTH),
       })
     )
     .mutation(async ({ input }) => {
+      let image: ReturnType<typeof validateProductImageBase64>;
+      try {
+        image = validateProductImageBase64(input.fileBase64);
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Imagem inválida." });
+      }
+      const baseName = input.fileName
+        .replace(/\.[^.]*$/, "")
+        .replace(/[^a-zA-Z0-9_-]/g, "_")
+        .slice(0, 120) || "produto";
       const result = await uploadImageToGitHub({
-        fileName: input.fileName,
+        fileName: `${baseName}.${image.extension}`,
         fileBase64: input.fileBase64,
       });
       return result;

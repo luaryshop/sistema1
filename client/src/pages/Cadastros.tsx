@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Edit3, Layers3, Package, Plus, Save, Trash2, Video, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { CatalogImportDialog } from "@/components/CatalogImportDialog";
+import { ProductImageUploadField } from "@/components/ProductImageUploadField";
 
 type TabKey = "produtos" | "insumos" | "banhos" | "kits" | "estoque" | "financeiro" | "seo" | "live";
 type KitLine = { kind: "product" | "insumo"; referenceId: string; quantity: string };
@@ -22,13 +23,13 @@ type FinanceForm = { description: string; type: "income" | "expense"; amount: st
 type LiveForm = { title: string; platform: string; scheduledAt: string; status: string; link: string; notes: string };
 
 type ProductForm = {
-  sku: string; name: string; category: string; brand: string; description: string; imageUrl: string;
+  sku: string; name: string; category: string; brand: string; description: string; photoUrl: string;
   costBase: string; basePrice: string; stock: string; minStock: string;
   weightBase: string; height: string; width: string; length: string;
   ncm: string; cest: string; origin: string; mpn: string;
 };
 const emptyProduct: ProductForm = {
-  sku: "", name: "", category: "", brand: "", description: "", imageUrl: "",
+  sku: "", name: "", category: "", brand: "", description: "", photoUrl: "",
   costBase: "", basePrice: "", stock: "", minStock: "",
   weightBase: "", height: "", width: "", length: "",
   ncm: "", cest: "", origin: "", mpn: "",
@@ -130,54 +131,15 @@ export default function Cadastros() {
   const loading = allQueries.some((query) => query.isLoading);
   const summary = financeSummaryQuery.data ?? { income: 0, expense: 0, balance: 0 };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 5MB.");
-      return;
-    }
-
-    setUploadingImage(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = (reader.result as string).split(",")[1];
-
-      try {
-        const response = await fetch("/api/upload-github", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileBase64: base64String,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.url) {
-          setProductForm((prev) => ({ ...prev, imageUrl: data.url }));
-          toast.success("Imagem enviada e integrada com sucesso!");
-        } else {
-          toast.error("Erro ao enviar imagem.");
-        }
-      } catch (error) {
-        toast.error("Falha ao comunicar com o serviço de upload.");
-      } finally {
-        setUploadingImage(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
   const handleProduct = async () => {
     if (!productForm.sku.trim() || !productForm.name.trim()) return toast.error("Informe SKU e nome do produto");
+    if (uploadingImage) return toast.error("Aguarde o término do envio da imagem.");
     try {
       const payload = {
         sku: productForm.sku.trim(), name: productForm.name.trim(),
         category: productForm.category || undefined, brand: productForm.brand || undefined,
         description: productForm.description || undefined,
-        imageUrl: productForm.imageUrl || undefined,
+        photoUrl: productForm.photoUrl || null,
         costBase: moneyToCents(productForm.costBase), basePrice: moneyToCents(productForm.basePrice),
         stock: toNumber(productForm.stock), minStock: toNumber(productForm.minStock),
         weightBase: toNumber(productForm.weightBase), height: toNumber(productForm.height),
@@ -193,7 +155,7 @@ export default function Cadastros() {
     setEditingProductId(item.id);
     setProductForm({
       sku: item.sku, name: item.name, category: item.category ?? "", brand: item.brand ?? "",
-      description: item.description ?? "", imageUrl: (item as any).imageUrl ?? "",
+      description: item.description ?? "", photoUrl: item.photoUrl ?? (item as any).imageUrl ?? "",
       costBase: ((item.costBase ?? 0) / 100).toFixed(2),
       basePrice: ((item.basePrice ?? 0) / 100).toFixed(2), stock: String(item.stock ?? 0), minStock: String(item.minStock ?? 0),
       weightBase: String(item.weightBase ?? 0), height: String(item.height ?? 0), width: String(item.width ?? 0), length: String(item.length ?? 0),
@@ -265,8 +227,8 @@ export default function Cadastros() {
               {filteredProducts.length === 0 ? <EmptyState icon={Package} title="Nenhum produto encontrado" description="Cadastre o primeiro produto ao lado." /> : filteredProducts.map((product) => (
                 <div key={product.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    {(product as any).imageUrl && (
-                      <img src={(product as any).imageUrl} alt={product.name} className="h-12 w-12 rounded-xl object-cover border border-slate-200 shrink-0" />
+                    {(product.photoUrl || (product as any).imageUrl) && (
+                      <img src={product.photoUrl || (product as any).imageUrl} alt={product.name} className="h-12 w-12 rounded-xl object-cover border border-slate-200 shrink-0" />
                     )}
                     <div>
                       <div className="flex items-center gap-2"><p className="font-semibold">{product.name}</p><Badge variant="secondary">{product.status}</Badge></div>
@@ -300,20 +262,14 @@ export default function Cadastros() {
               </div>
               <Field label="Descrição"><Textarea className="bg-white/10 text-white" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></Field>
 
-              {/* Upload de Imagem integrado ao GitHub */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-300">Imagem do Produto (Marketplaces)</Label>
-                <Input
-                  type="file"
-                  accept="image/jpeg,image/png,image/jpg"
-                  onChange={handleImageUpload}
-                  className="w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer bg-white/10 border-white/20"
-                />
-                {uploadingImage && <p className="text-xs text-blue-300 mt-1">Enviando imagem para o GitHub...</p>}
-                {productForm.imageUrl && (
-                  <img src={productForm.imageUrl} alt="Preview" className="w-20 h-20 object-cover rounded-xl mt-2 border border-white/30" />
-                )}
-              </div>
+              <ProductImageUploadField
+                value={productForm.photoUrl}
+                onChange={(photoUrl) => setProductForm((previous) => ({ ...previous, photoUrl }))}
+                onUploadingChange={setUploadingImage}
+                disabled={createProduct.isPending || updateProduct.isPending}
+                tone="dark"
+                label="Imagem do produto (marketplaces)"
+              />
 
               <p className="pt-2 text-[11px] font-bold uppercase tracking-wider text-white/50">Preço &amp; estoque</p>
               <div className="grid grid-cols-2 gap-3">
@@ -342,7 +298,7 @@ export default function Cadastros() {
               <Field label="MPN / código do fabricante (opcional)"><Input className="bg-white/10 text-white" value={productForm.mpn} onChange={(e) => setProductForm({ ...productForm, mpn: e.target.value })} /></Field>
 
               <div className="flex gap-2 pt-2">
-                <Button className="flex-1 bg-[#e5a27e] text-[#152c2c] hover:bg-[#f2b696]" onClick={handleProduct} disabled={createProduct.isPending || updateProduct.isPending}>
+                <Button className="flex-1 bg-[#e5a27e] text-[#152c2c] hover:bg-[#f2b696]" onClick={handleProduct} disabled={createProduct.isPending || updateProduct.isPending || uploadingImage}>
                   {editingProductId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
                   {editingProductId ? "Atualizar produto" : "Cadastrar produto"}
                 </Button>
@@ -408,3 +364,6 @@ export default function Cadastros() {
       <TabsContent value="seo" className="mt-5"><div className="grid gap-5 lg:grid-cols-[1fr_400px]"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Configurações SEO</CardTitle><CardDescription>Metadados da loja e páginas públicas.</CardDescription></CardHeader><CardContent className="space-y-3">{(seoQuery.data ?? []).filter((item) => !q || `${item.pageKey} ${item.title}`.toLowerCase().includes(q)).length === 0 ? <EmptyState icon={Edit3} title="Nenhuma configuração SEO" description="Defina os metadados da página ao lado." /> : (seoQuery.data ?? []).filter((item) => !q || `${item.pageKey} ${item.title}`.toLowerCase().includes(q)).map((item) => <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-100 p-4"><div><p className="font-medium">{item.pageKey}</p><p className="text-sm text-slate-500">{item.title}</p></div><div className="flex items-center gap-1"><RowActions onEdit={() => editSeo(item)} onRemove={() => void (async () => { await removeSeo.mutateAsync({ id: item.id }); refreshAll(); toast.success("Configuração removida"); })()} /></div></div>)}</CardContent></Card><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Editar SEO</CardTitle></CardHeader><CardContent className="space-y-3"><Field label="Página"><Input value={seoForm.pageKey} onChange={(e) => setSeoForm({ ...seoForm, pageKey: e.target.value })} /></Field><Field label="Título"><Input value={seoForm.title} onChange={(e) => setSeoForm({ ...seoForm, title: e.target.value })} /></Field><Field label="Descrição"><Textarea value={seoForm.description} onChange={(e) => setSeoForm({ ...seoForm, description: e.target.value })} /></Field><Field label="Palavras-chave"><Input value={seoForm.keywords} onChange={(e) => setSeoForm({ ...seoForm, keywords: e.target.value })} /></Field><Field label="URL canônica"><Input type="url" value={seoForm.canonicalUrl} onChange={(e) => setSeoForm({ ...seoForm, canonicalUrl: e.target.value })} /></Field><Button className="w-full" onClick={handleSeo} disabled={upsertSeo.isPending}><Save className="mr-2 h-4 w-4" /> Salvar SEO</Button></CardContent></Card></div></TabsContent>
 
       <TabsContent value="live" className="mt-5"><div className="grid gap-5 lg:grid-cols-[1fr_380px]"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Lives planejadas</CardTitle><CardDescription>Organize lançamentos, demonstrações e vendas ao vivo.</CardDescription></CardHeader><CardContent className="space-y-3">{filteredLives.length === 0 ? <EmptyState icon={Video} title="Nenhuma live planejada" description="Agende a próxima transmissão ao lado." /> : filteredLives.map((item) => <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-100 p-4"><div><div className="flex items-center gap-2"><p className="font-medium">{item.title}</p><Badge variant="secondary">{item.status}</Badge></div><p className="text-sm text-slate-500">{item.platform} · {item.scheduledAt ? new Date(item.scheduledAt).toLocaleString("pt-BR") : "Data a definir"}</p></div><RowActions onEdit={() => editLive(item)} onRemove={() => void (async () => { await removeLive.mutateAsync({ id: item.id }); refreshAll(); toast.success("Live removida"); })()} /></div>)}</CardContent></Card><Card className="border-0 shadow-sm"><CardHeader><CardTitle>{editingLiveId ? "Editar live" : "Nova live"}</CardTitle></CardHeader><CardContent className="space-y-3"><Field label="Título"><Input value={liveForm.title} onChange={(e) => setLiveForm({ ...liveForm, title: e.target.value })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Plataforma"><Input value={liveForm.platform} onChange={(e) => setLiveForm({ ...liveForm, platform: e.target.value })} /></Field><Field label="Status"><select className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm" value={liveForm.status} onChange={(e) => setLiveForm({ ...liveForm, status: e.target.value })}><option value="planned">Planejada</option><option value="scheduled">Agendada</option><option value="live">Ao vivo</option><option value="finished">Finalizada</option><option value="cancelled">Cancelada</option></select></Field></div><Field label="Data e hora"><Input type="datetime-local" value={liveForm.scheduledAt} onChange={(e) => setLiveForm({ ...liveForm, scheduledAt: e.target.value })} /></Field><Field label="Link"><Input type="url" value={liveForm.link} onChange={(e) => setLiveForm({ ...liveForm, link: e.target.value })} /></Field><div className="flex gap-2"><Button className="flex
+-1" onClick={handleLive} disabled={createLive.isPending || updateLive.isPending}>{editingLiveId ? <Save className="mr-2 h-4 w-4" /> : <CalendarDays className="mr-2 h-4 w-4" />}{editingLiveId ? "Atualizar live" : "Planejar live"}</Button>{editingLiveId && <Button variant="outline" onClick={() => { setEditingLiveId(null); setLiveForm(emptyLive); }}>Cancelar</Button>}</div></CardContent></Card></div></TabsContent>
+    </Tabs></div></div>;
+}

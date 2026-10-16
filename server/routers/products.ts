@@ -13,6 +13,7 @@ const productFields = {
   category: z.string().trim().max(100).optional(),
   brand: z.string().trim().max(100).optional(),
   description: z.string().trim().max(10000).optional(),
+  photoUrl: z.string().trim().url("URL da imagem inválida").max(500).nullable().optional(),
   costBase: z.number().int().min(0).default(0),
   basePrice: z.number().int().min(0).default(0),
   weightBase: z.number().int().min(0).default(0),
@@ -282,6 +283,7 @@ export const productsRouter = router({
         if (input.category !== undefined) updateData.category = input.category;
         if (input.brand !== undefined) updateData.brand = input.brand;
         if (input.description !== undefined) updateData.description = input.description;
+        if (input.photoUrl !== undefined) updateData.photoUrl = input.photoUrl;
         if (input.costBase !== undefined) updateData.costBase = input.costBase;
         if (input.basePrice !== undefined) updateData.basePrice = input.basePrice;
         if (input.weightBase !== undefined) updateData.weightBase = input.weightBase;

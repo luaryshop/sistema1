@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Edit2, Trash2, Share2, Calculator, Boxes } from "lucide-react";
 import { toast } from "sonner";
+import { ProductImageUploadField } from "@/components/ProductImageUploadField";
 
 export default function Products() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -21,7 +22,7 @@ export default function Products() {
     costBase: 0,
     stock: 0,
     minStock: 0,
-    imageUrl: "",
+    photoUrl: "",
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -33,7 +34,7 @@ export default function Products() {
     costBase: 0,
     stock: 0,
     minStock: 0,
-    imageUrl: "",
+    photoUrl: "",
   });
 
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -66,55 +67,12 @@ export default function Products() {
   const removeMutation = trpc.products.remove.useMutation();
   const publishMutation = trpc.products.publishToAllMarketplaces.useMutation();
 
-  // Função de upload de imagem para o GitHub
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 5MB.");
-      return;
-    }
-
-    setUploadingImage(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = (reader.result as string).split(",")[1];
-
-      try {
-        const response = await fetch("/api/upload-github", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileBase64: base64String,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.url) {
-          if (isEdit) {
-            setEditFormData((prev) => ({ ...prev, imageUrl: data.url }));
-          } else {
-            setFormData((prev) => ({ ...prev, imageUrl: data.url }));
-          }
-          toast.success("Imagem enviada e integrada com sucesso!");
-        } else {
-          toast.error("Erro ao enviar imagem.");
-        }
-      } catch (error) {
-        toast.error("Falha ao comunicar com o serviço de upload.");
-      } finally {
-        setUploadingImage(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
   const handleCreate = async () => {
+    if (uploadingImage) return toast.error("Aguarde o término do envio da imagem.");
     try {
       await createMutation.mutateAsync({
         ...formData,
+        photoUrl: formData.photoUrl || undefined,
         costBase: formData.costBase * 100, // Convert to cents
       });
       toast.success("Produto criado com sucesso");
@@ -127,7 +85,7 @@ export default function Products() {
         costBase: 0,
         stock: 0,
         minStock: 0,
-        imageUrl: "",
+        photoUrl: "",
       });
       setIsCreateOpen(false);
       refetch();
@@ -147,17 +105,19 @@ export default function Products() {
       costBase: (product.costBase ?? 0) / 100,
       stock: product.stock ?? 0,
       minStock: product.minStock ?? 0,
-      imageUrl: (product as any).imageUrl ?? "",
+      photoUrl: product.photoUrl ?? (product as any).imageUrl ?? "",
     });
     setIsEditOpen(true);
   };
 
   const handleUpdate = async () => {
     if (editingProductId === null) return;
+    if (uploadingImage) return toast.error("Aguarde o término do envio da imagem.");
     try {
       await updateMutation.mutateAsync({
         id: editingProductId,
         ...editFormData,
+        photoUrl: editFormData.photoUrl || null,
         costBase: Math.round(editFormData.costBase * 100),
       });
       toast.success("Produto atualizado com sucesso");
@@ -275,14 +235,12 @@ export default function Products() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
               
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500">Imagem do Produto (Padrão Marketplaces)</label>
-                <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
-                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem para o GitHub...</p>}
-                {formData.imageUrl && (
-                  <img src={formData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
-                )}
-              </div>
+              <ProductImageUploadField
+                value={formData.photoUrl}
+                onChange={(photoUrl) => setFormData((previous) => ({ ...previous, photoUrl }))}
+                onUploadingChange={setUploadingImage}
+                disabled={createMutation.isPending}
+              />
 
               <Input
                 type="number"
@@ -302,8 +260,8 @@ export default function Products() {
                 value={formData.minStock}
                 onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
               />
-              <Button onClick={handleCreate} className="w-full">
-                Criar Produto
+              <Button onClick={handleCreate} className="w-full" disabled={createMutation.isPending || uploadingImage}>
+                {createMutation.isPending ? "Criando..." : "Criar Produto"}
               </Button>
             </div>
           </DialogContent>
@@ -341,14 +299,13 @@ export default function Products() {
                 onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
               />
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500">Alterar Imagem do Produto</label>
-                <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, true)} />
-                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem para o GitHub...</p>}
-                {editFormData.imageUrl && (
-                  <img src={editFormData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
-                )}
-              </div>
+              <ProductImageUploadField
+                value={editFormData.photoUrl}
+                onChange={(photoUrl) => setEditFormData((previous) => ({ ...previous, photoUrl }))}
+                onUploadingChange={setUploadingImage}
+                disabled={updateMutation.isPending}
+                label="Imagem do produto"
+              />
 
               <Input
                 type="number"
@@ -368,7 +325,7 @@ export default function Products() {
                 value={editFormData.minStock}
                 onChange={(e) => setEditFormData({ ...editFormData, minStock: parseInt(e.target.value) || 0 })}
               />
-              <Button onClick={handleUpdate} className="w-full" disabled={updateMutation.isPending}>
+              <Button onClick={handleUpdate} className="w-full" disabled={updateMutation.isPending || uploadingImage}>
                 {updateMutation.isPending ? "Salvando..." : "Salvar Alterações"}
               </Button>
             </div>
@@ -379,9 +336,9 @@ export default function Products() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {products?.map((product: any) => (
           <Card key={product.id} className="rounded-3xl border-slate-200/85 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md overflow-hidden">
-            {product.imageUrl && (
+            {(product.photoUrl || product.imageUrl) && (
               <div className="h-40 w-full bg-slate-100 overflow-hidden flex items-center justify-center border-b">
-                <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                <img src={product.photoUrl || product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
               </div>
             )}
             <CardHeader>
