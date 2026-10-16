@@ -66,7 +66,7 @@ export default function Products() {
   const removeMutation = trpc.products.remove.useMutation();
   const publishMutation = trpc.products.publishToAllMarketplaces.useMutation();
 
-  // Função para lidar com o upload de imagem (convertendo para Base64 e enviando ao servidor)
+  // Função de upload de imagem para o GitHub
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -216,7 +216,7 @@ export default function Products() {
               <Boxes className="h-3.5 w-3.5" /> Command Center / Catálogo
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Produtos</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Seu catálogo mestre com suporte a imagens universais para marketplaces.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Seu catálogo mestre com suporte a imagens universais via GitHub.</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block">
@@ -278,7 +278,7 @@ export default function Products() {
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-500">Imagem do Produto (Padrão Marketplaces)</label>
                 <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
-                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem...</p>}
+                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem para o GitHub...</p>}
                 {formData.imageUrl && (
                   <img src={formData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
                 )}
@@ -344,7 +344,7 @@ export default function Products() {
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-500">Alterar Imagem do Produto</label>
                 <Input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, true)} />
-                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem...</p>}
+                {uploadingImage && <p className="text-xs text-blue-600">Enviando imagem para o GitHub...</p>}
                 {editFormData.imageUrl && (
                   <img src={editFormData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md mt-2 border" />
                 )}
